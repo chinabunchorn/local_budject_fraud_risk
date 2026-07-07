@@ -1,0 +1,12 @@
+# LANTA scrontab entry — automatic resubmission of the serving job so the
+# demo window survives walltime expiry (Phase 1 step 7).
+# Install with: scrontab scrontab.txt   (or scrontab -e and paste)
+#
+# Every 15 minutes: if no m3-vllm-serve job is queued or running, resubmit.
+# tunnel.sh on the app VM (autossh) reconnects on its own once the new node
+# publishes its hostname.
+
+#SCRON --account=ltXXXXXX             # TODO
+#SCRON --partition=serial            # TODO: cheap CPU partition for the check
+#SCRON --time=00:05:00
+*/15 * * * * squeue --me --name=m3-vllm-serve --noheader | grep -q . || sbatch /project/ltXXXXXX-mission3/slurm/serve_vllm.sbatch
