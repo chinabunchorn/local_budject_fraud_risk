@@ -1,0 +1,30 @@
+# Apptainer definition for the Mission 3 inference container.
+#
+# Build (on the LANTA login node, or locally then SFTP the .sif):
+#   apptainer build vllm.sif vllm.def
+#
+# Compute nodes are AIR-GAPPED: nothing may be downloaded at runtime.
+# Model weights live on Lustre (see scripts/stage_weights.sh) and are
+# bind-mounted at run time; HF_HUB_OFFLINE below makes any accidental
+# network fetch fail fast instead of hanging.
+
+Bootstrap: docker
+From: vllm/vllm-openai:v0.9.1
+
+%labels
+    Project mission3-local-budget-fraud-risk
+    Purpose vLLM serving + offline batch on LANTA (4x A100 40GB, Ampere)
+
+%environment
+    export HF_HUB_OFFLINE=1
+    export TRANSFORMERS_OFFLINE=1
+    export VLLM_NO_USAGE_STATS=1
+    export DO_NOT_TRACK=1
+
+%post
+    # Keep additions minimal — the official image already contains vLLM.
+    # Anything extra must be installed HERE (never at runtime on compute nodes).
+    :
+
+%runscript
+    exec python3 -m vllm.entrypoints.openai.api_server "$@"

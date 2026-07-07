@@ -1,0 +1,103 @@
+flowchart TB
+
+    %% =========================================================
+    %% MISSION 3 - SYSTEM ARCHITECTURE
+    %% Local Budget Fraud Risk & Document Intelligence Assistant
+    %% =========================================================
+
+    subgraph CLIENT["CLIENT LAYER - Auditor workstations (browser)"]
+        direction LR
+        UI["Next.js 15 + TypeScript<br/>Tailwind CSS + shadcn/ui<br/>Thai i18n"]
+        DASH["Risk Dashboard<br/>Apache ECharts<br/>heatmaps + time-series trends"]
+        CHATUI["Document Chatbot UI<br/>SSE streaming + inline source citations"]
+        UI --- DASH
+        UI --- CHATUI
+    end
+
+    subgraph APPZONE["APPLICATION ZONE - cloud/on-prem VM with public IP (Docker Compose)"]
+        GW["Traefik v3<br/>reverse proxy + TLS"]
+
+        subgraph APIL["Application API Layer"]
+            API["FastAPI + Pydantic v2<br/>REST + SSE endpoints"]
+            AUTH["Keycloak OIDC / JWT<br/>RBAC: Admin / Senior Auditor / Auditor"]
+            ORCH["Prefect 3 orchestrator<br/>sbatch submit + SFTP over SSH"]
+        end
+
+        subgraph AGL["Agentic Framework and Orchestration"]
+            AGENT["LangGraph<br/>RAG state graph + tool calling"]
+            EMB["TEI server<br/>BGE-M3 embeddings<br/>BGE-reranker-v2-m3"]
+        end
+
+        subgraph GRL["Guardrails Layer"]
+            GUARD["Guardrails AI + Pydantic validators<br/>JSON schema + citation existence<br/>Thai non-accusation lexicon"]
+        end
+
+        subgraph OBL["LLM Observability and Tracing"]
+            LF["Langfuse v3 (self-hosted)<br/>traces / prompt lineage / token costs"]
+            MON["Prometheus + Grafana<br/>vLLM and API metrics"]
+        end
+    end
+
+    subgraph DL["UNIFIED DATA LAYER"]
+        PG[("PostgreSQL 16<br/>relational + JSONB risk results<br/>pgvector RAG index")]
+        REDIS[("Redis 7<br/>cache / sessions / rate limits")]
+        MINIO[("MinIO<br/>raw PDFs + pipeline artifacts")]
+    end
+
+    subgraph LANTA["LANTA HPC - private network, no public IP, Slurm-managed"]
+        LOGIN["Login / Transfer node<br/>SSH gateway"]
+        SLURM["Slurm scheduler<br/>GPU partition, walltime 24-48 h"]
+        subgraph NODE["GPU compute node - 4x NVIDIA A100 40GB"]
+            APPT["Apptainer / Singularity container<br/>built from official vLLM image"]
+            VLLM["vLLM OpenAI-compatible server :8000<br/>XGrammar guided-JSON decoding"]
+            M1["Typhoon 2.5 Qwen3-30B-A3B<br/>Thai chat / RAG answering"]
+            M2["Qwen3-32B AWQ-INT4<br/>batch risk scoring + legal reasoning"]
+            M3["Typhoon-OCR 1.5 (2B)<br/>Thai document parsing"]
+        end
+        SCR[("Lustre scratch FS<br/>staged inputs / JSON outputs<br/>+ cached model weights")]
+    end
+
+    %% ---- intra-LANTA wiring
+    LOGIN --> SLURM
+    SLURM -->|"allocate + launch"| NODE
+    APPT --> VLLM
+    VLLM --- M1
+    VLLM --- M2
+    VLLM --- M3
+    NODE --- SCR
+
+    %% ---- client to application zone
+    UI -->|"HTTPS"| GW
+    GW --> API
+    API -->|"OIDC token + role check"| AUTH
+    API --> REDIS
+    API -->|"read pre-computed risk JSONB"| PG
+    API --> AGENT
+    AGENT --> EMB
+    AGENT -->|"pgvector top-k"| PG
+    AGENT --> GUARD
+
+    %% ---- batch orchestration path
+    ORCH -->|"pull raw docs"| MINIO
+    ORCH -->|"ssh: sbatch + sftp staging"| LOGIN
+    ORCH --> GUARD
+    GUARD -->|"validated structured JSON only"| PG
+
+    %% ---- live inference path (demo window)
+    API -. "autossh -L 8000:computenode:8000" .-> LOGIN
+    LOGIN -. "port-forward to active job" .-> VLLM
+
+    %% ---- observability taps
+    API --> LF
+    AGENT --> LF
+    VLLM -. "GPU + token metrics" .-> MON
+
+    %% ---- styling
+    classDef store fill:#efe6f7,stroke:#7b4bab,color:#2d1b45;
+    classDef hpc fill:#fdebd3,stroke:#c07c1f,color:#4a3008;
+    classDef guard fill:#fde3e3,stroke:#c0392b,color:#5b1410;
+    classDef obs fill:#e2f3e8,stroke:#2e8b57,color:#123c25;
+    class PG,REDIS,MINIO,SCR store
+    class LOGIN,SLURM,APPT,VLLM,M1,M2,M3 hpc
+    class GUARD guard
+    class LF,MON obs

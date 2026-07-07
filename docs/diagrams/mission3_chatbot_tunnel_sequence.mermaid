@@ -1,0 +1,31 @@
+sequenceDiagram
+    autonumber
+    participant OPS as Prefect / Ops runner
+    participant LOG as LANTA login node
+    participant SLM as Slurm scheduler
+    participant GPU as Compute node - Apptainer + vLLM
+    participant BE as FastAPI backend
+    participant AUD as Auditor UI
+
+    Note over OPS,GPU: Phase 1 - bring the inference engine up inside the walltime window
+    OPS->>LOG: ssh + sbatch serve_vllm job
+    LOG->>SLM: enqueue on GPU partition
+    SLM->>GPU: allocate node, start Apptainer, launch vLLM on :8000
+    GPU-->>OPS: squeue reports RUNNING + compute node hostname
+
+    Note over OPS,BE: Phase 2 - open the secure tunnel
+    OPS->>LOG: autossh -N -L 127.0.0.1:8000 to computenode:8000
+    LOG-->>BE: forwarded port now reachable on the backend host
+
+    Note over AUD,GPU: Phase 3 - live RAG chat during the demo window
+    AUD->>BE: Thai question via SSE
+    BE->>BE: embed query, pgvector retrieval, build cited prompt
+    BE->>GPU: POST /v1/chat/completions through the tunnel
+    GPU-->>BE: token stream
+    BE->>BE: output guardrails - citations + terminology
+    BE-->>AUD: streamed answer with source citations
+
+    Note over SLM,GPU: Phase 4 - walltime expiry (24-48 h)
+    SLM->>GPU: job terminated, tunnel drops
+    OPS->>LOG: scrontab / Prefect resubmits job + autossh reconnects
+    Note over BE,AUD: Dashboard remains fully functional - it reads only the database

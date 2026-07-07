@@ -1,0 +1,95 @@
+flowchart TB
+
+    %% =========================================================
+    %% MISSION 3 - DATA FLOW DIAGRAM (3 PIPELINES)
+    %% B = Offline Batch | D = Online Dashboard | L = Live Chatbot
+    %% =========================================================
+
+    subgraph UDL["UNIFIED DATA LAYER - shared by all three pipelines"]
+        direction LR
+        PG[("PostgreSQL 16 + pgvector<br/>projects / risk JSONB / regulation index / doc chunks")]
+        RED[("Redis cache")]
+    end
+
+    subgraph HPC["LANTA - active Slurm job (Apptainer + vLLM, walltime 24-48 h)"]
+        direction LR
+        SCR[("Lustre scratch<br/>chunk batches in / risk JSON out")]
+        BJOB["vLLM offline batch inference<br/>Qwen3-32B AWQ, temperature 0<br/>risk factors + regulation linkage + feedback sentiment<br/>XGrammar guided JSON"]
+        VSRV["vLLM online server :8000<br/>Typhoon 2.5 Qwen3-30B-A3B (Thai chat)"]
+    end
+
+    %% ------------------ PIPELINE 1: OFFLINE BATCH ------------------
+    subgraph P1["PIPELINE 1 - OFFLINE BATCH: pre-compute all risk analytics"]
+        direction TB
+        SRC["Raw sub-district data<br/>budget PDFs / project sheets / auditor feedback"]
+        EXT["Prefect flow: Docling extraction<br/>+ Typhoon-OCR 1.5 for scanned Thai pages"]
+        CHK["Thai-aware chunking<br/>PyThaiNLP segmentation + metadata tagging"]
+        EMB1["BGE-M3 embeddings (TEI, app VM)"]
+        VAL["Guardrails AI validation<br/>JSON schema / score ranges /<br/>non-accusation Thai lexicon"]
+    end
+
+    SRC -->|"B1 ingest via MinIO"| EXT
+    EXT -->|"B2 clean text"| CHK
+    CHK -->|"B3"| EMB1
+    EMB1 -->|"B4 vectors + chunks"| PG
+    CHK -->|"B5 SFTP staging via login node"| SCR
+    SCR -->|"B6 read batch"| BJOB
+    BJOB -->|"B7 structured risk JSON"| SCR
+    SCR -->|"B8 SFTP pull results"| VAL
+    VAL -->|"B9 upsert validated JSONB"| PG
+
+    %% ------------------ PIPELINE 2: ONLINE DASHBOARD ------------------
+    subgraph P2["PIPELINE 2 - ONLINE DASHBOARD: DB-only read path, no LLM"]
+        direction TB
+        AUD1["Auditor browser"]
+        DUI["Next.js dashboard<br/>ECharts risk heatmap / time-series trends"]
+        API1["FastAPI<br/>JWT + RBAC enforcement"]
+    end
+
+    AUD1 -->|"D1 HTTPS"| DUI
+    DUI -->|"D2 REST"| API1
+    API1 -->|"D3 cache lookup"| RED
+    API1 -->|"D4 SQL over pre-computed risk"| PG
+    PG -->|"D5 JSONB rows"| API1
+    API1 -->|"D6 chart-ready payload"| DUI
+
+    %% ------------------ PIPELINE 3: LIVE CHATBOT ------------------
+    subgraph P3["PIPELINE 3 - LIVE CHATBOT: RAG through SSH tunnel (demo window)"]
+        direction TB
+        AUD2["Auditor browser"]
+        CUI["Chatbot UI (SSE)"]
+        API2["FastAPI + LangGraph<br/>RAG orchestration"]
+        EMB2["BGE-M3 query embedding<br/>+ BGE-reranker-v2-m3"]
+        TUN["autossh tunnel<br/>backend :8000 to compute node :8000<br/>via LANTA login node"]
+        OG["Output guardrails<br/>citation existence / terminology filter /<br/>refuse unsupported claims"]
+    end
+
+    AUD2 -->|"L1 Thai question"| CUI
+    CUI -->|"L2 SSE request"| API2
+    API2 -->|"L3 embed + rerank"| EMB2
+    API2 -->|"L4 pgvector top-k: docs + regulations"| PG
+    API2 -->|"L5 prompt + retrieved context"| TUN
+    TUN -->|"L6 forwarded request"| VSRV
+    VSRV -->|"L7 token stream"| TUN
+    TUN -->|"L8 stream"| API2
+    API2 -->|"L9 validate"| OG
+    OG -->|"L10 answer + cited sources"| CUI
+
+    %% ------------------ OBSERVABILITY ------------------
+    LFX["Langfuse: traces every LLM call<br/>(B6-B8, L5-L9) with full prompt lineage"]
+    API2 -.-> LFX
+    BJOB -.-> LFX
+
+    %% ---- styling
+    classDef batch fill:#e2edf9,stroke:#1e5aa8,color:#0d2b52;
+    classDef dashp fill:#e2f3e8,stroke:#2e8b57,color:#123c25;
+    classDef live fill:#fdebd3,stroke:#c07c1f,color:#4a3008;
+    classDef store fill:#efe6f7,stroke:#7b4bab,color:#2d1b45;
+    classDef hpcn fill:#fde3e3,stroke:#c0392b,color:#5b1410;
+    classDef obsn fill:#f0f0f0,stroke:#666666,color:#222222;
+    class SRC,EXT,CHK,EMB1,VAL batch
+    class AUD1,DUI,API1 dashp
+    class AUD2,CUI,API2,EMB2,TUN,OG live
+    class PG,RED,SCR store
+    class BJOB,VSRV hpcn
+    class LFX obsn

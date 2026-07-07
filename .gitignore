@@ -1,0 +1,39 @@
+# Secrets — never commit real environment files
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# Mock corpus is gitignored — canonical copy lives in MinIO
+data/mock_corpus/*
+!data/mock_corpus/.gitkeep
+
+# Model weights are never committed
+*.safetensors
+*.gguf
+*.sif
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Docker volumes / local state
+volumes/
