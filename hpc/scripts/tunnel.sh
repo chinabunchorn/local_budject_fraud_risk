@@ -8,12 +8,6 @@
 # When no job is running this script exits non-zero — the chatbot then shows
 # its "outside demonstration window" state. That is designed behavior.
 #
-# *** 2FA CAVEAT (verified July 2026): LANTA requires password + Google 2FA on
-# every SSH connection, so this script currently needs a human at the keyboard
-# for the initial auth, and autossh CANNOT silently reconnect after a drop.
-# Unattended operation is blocked until ThaiSC confirms whether a registered
-# deploy key bypasses 2FA (asked: thaisc-support@nstda.or.th). ***
-#
 # Usage: LANTA_SSH_USER=... LANTA_SSH_KEY_PATH=... ./tunnel.sh
 # ============================================================================
 set -euo pipefail
@@ -21,7 +15,7 @@ set -euo pipefail
 LANTA_HOST="${LANTA_SSH_HOST:-lanta.nstda.or.th}"
 LANTA_USER="${LANTA_SSH_USER:?set LANTA_SSH_USER}"
 SSH_KEY="${LANTA_SSH_KEY_PATH:?set LANTA_SSH_KEY_PATH (dedicated deploy key)}"
-PROJECT_DIR="${LANTA_PROJECT_DIR:-/project/tn999991-cstu/chin}"
+PROJECT_DIR="${LANTA_PROJECT_DIR:-/project/ltXXXXXX-mission3}"   # TODO
 LOCAL_PORT="${TUNNEL_LOCAL_PORT:-8000}"
 
 SSH_OPTS=(-i "$SSH_KEY" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)

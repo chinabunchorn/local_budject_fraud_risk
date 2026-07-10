@@ -1,15 +1,7 @@
 # Apptainer definition for the Mission 3 inference container.
 #
-# VERIFIED ON LANTA (July 2026) — see hpc/LANTA_CONFIG_NOTES.md:
-#   - LANTA's GPU driver supports CUDA <= 12.7. Newer vLLM tags ship CUDA 12.9
-#     and fail with "NVIDIA driver too old". v0.11.0 (CUDA 12.4) works and is
-#     the first tag with Qwen3-VL support (needed for Typhoon-OCR 1.5).
-#   - In practice the image was pulled directly (no custom build needed):
-#       module load Apptainer/1.1.6
-#       export APPTAINER_CACHEDIR=/project/tn999991-cstu/chin/containers/.apptainer_cache
-#       apptainer pull vllm-v0110.sif docker://vllm/vllm-openai:v0.11.0
-#     Keep this .def only for the day we need %post additions (needs --fakeroot,
-#     untried on LANTA — open question with ThaiSC).
+# Build (on the LANTA login node, or locally then SFTP the .sif):
+#   apptainer build vllm.sif vllm.def
 #
 # Compute nodes are AIR-GAPPED: nothing may be downloaded at runtime.
 # Model weights live on Lustre (see scripts/stage_weights.sh) and are
@@ -17,7 +9,7 @@
 # network fetch fail fast instead of hanging.
 
 Bootstrap: docker
-From: vllm/vllm-openai:v0.11.0
+From: vllm/vllm-openai:v0.9.1
 
 %labels
     Project mission3-local-budget-fraud-risk
