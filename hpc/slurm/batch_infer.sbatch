@@ -3,7 +3,9 @@
 #SBATCH --account=tn999991            # billing account (sbalance descr: cstu)
 #SBATCH --partition=gpu               # gpu-devel (2h cap) is fine for small test batches
 #SBATCH --nodes=1
-#SBATCH --gpus-per-node=1             # OCR (2B) and INT4 batch models fit one A100; raise if needed
+#SBATCH --gpus-per-node=2             # BATCH_MODEL below is the 30B chat model (needs TP2,
+                                       # see hpc/LANTA_CONFIG_NOTES.md); drop to 1 GPU only if
+                                       # this job is dedicated to the 2B OCR / INT4 batch models
 #SBATCH --cpus-per-task=16
 #SBATCH --time=12:00:00
 #SBATCH --output=%x-%j.out
@@ -26,6 +28,10 @@ SCRATCH_DIR="${LANTA_SCRATCH_DIR:-$PROJECT_DIR/batches}"   # /scratch is purged 
 SIF="$PROJECT_DIR/containers/vllm-v0110.sif"
 WEIGHTS="$PROJECT_DIR/models"
 BATCH_MODEL="scb10x/typhoon2.5-qwen3-30b-a3b"   # Phase-2 decision point: Qwen3-32B AWQ
+# NOTE: BATCH_MODEL and --gpus-per-node above must stay in sync. The 30B chat
+# model requires --tensor-parallel-size 2 (2 GPUs); the 2B OCR model and any
+# future INT4 batch model fit on 1 GPU. If Phase 2 splits this into separate
+# risk-scoring vs. OCR sbatch scripts, right-size --gpus-per-node per script.
 
 IN_DIR="$SCRATCH_DIR/in"
 OUT_DIR="$SCRATCH_DIR/out"
@@ -42,6 +48,6 @@ apptainer exec --nv \
     --cleanenv \
     --env PYTHONNOUSERSITE=1 \
     --env HF_HUB_OFFLINE=1 \
-    --bind /project/tn999991-cstu:/project/tn999991-cstu \
+    --bind "$PROJECT_DIR:$PROJECT_DIR" \
     "$SIF" \
     python3 -c "print('batch runner placeholder — implemented in Phase 2')"

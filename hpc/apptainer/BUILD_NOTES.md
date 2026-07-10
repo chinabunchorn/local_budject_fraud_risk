@@ -25,9 +25,14 @@ apptainer pull vllm-v0110.sif docker://vllm/vllm-openai:v0.11.0
 apptainer exec --nv \
     --cleanenv \                                      # host env leaks in otherwise
     --env PYTHONNOUSERSITE=1 \                        # ~/.local packages shadow container libs otherwise
-    --bind /project/tn999991-cstu:/project/tn999991-cstu \   # project storage NOT auto-bound
+    --bind /project/tn999991-cstu/chin:/project/tn999991-cstu/chin \   # project storage NOT auto-bound
     vllm-v0110.sif ...
 ```
+
+Bind is scoped to the `chin/` personal workspace, not the shared `/project/tn999991-cstu`
+root — that root is shared with faculty, and this container handles untrusted inputs
+(tunnel-facing chat traffic, ingested OCR PDFs), so it must not get read/write access
+to other users' data.
 
 Skipping `PYTHONNOUSERSITE=1` causes bizarre import errors (e.g.
 `torchvision::nms does not exist`) because Apptainer shares `$HOME` by default.

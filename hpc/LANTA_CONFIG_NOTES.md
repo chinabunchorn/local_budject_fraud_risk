@@ -62,7 +62,7 @@ LANTA's GPU driver reports **CUDA 12.7 max supported**. Anything compiled agains
 - **Critical flags for every `apptainer exec --nv` call:**
   - `--cleanenv` — without this, host shell environment variables leak into the container
   - `--env PYTHONNOUSERSITE=1` — without this, stray packages in `~/.local/lib/python3.12/site-packages/` (since Apptainer shares `$HOME` by default) collide with the container's own bundled libraries and cause bizarre import errors (e.g. `torchvision::nms does not exist`)
-  - `--bind /project/tn999991-cstu:/project/tn999991-cstu` — project storage is not auto-bound by default on this system
+  - `--bind /project/tn999991-cstu/chin:/project/tn999991-cstu/chin` — project storage is not auto-bound by default on this system. Scope the bind to the personal `chin/` workspace, not the shared `/project/tn999991-cstu` root — that root is shared with faculty, and the container ingests untrusted inputs (tunnel-facing chat traffic, OCR PDFs), so it shouldn't get read/write access to other users' data.
 - Recommended image going forward: `vllm-v0110.sif` (from `vllm/vllm-openai:v0.11.0`)
 
 ## Models Staged

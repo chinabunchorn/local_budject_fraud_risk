@@ -36,6 +36,10 @@ echo "$SLURM_JOB_ID" > "$RUN_DIR/current_job.txt"
 # Chat model: BF16, tensor-parallel 2.
 # --cleanenv + PYTHONNOUSERSITE=1 + explicit --bind are all REQUIRED on LANTA
 # (host env leakage / ~/.local package shadowing / project storage not auto-bound).
+# Bind is scoped to $PROJECT_DIR (the chin/ personal workspace), NOT the shared
+# /project/tn999991-cstu root — that root is shared with faculty and this
+# container ingests untrusted inputs (chat/tunnel traffic, OCR PDFs), so it
+# must not get read/write access to other users' data in the shared tree.
 # --max-model-len 8192: the model's 256K default blows the KV-cache budget on
 # 2x40GB; 8192 is the verified setting and covers chunked Thai legal documents.
 # Guided decoding (guided_choice / guided_json) is available per-request by
@@ -44,7 +48,7 @@ apptainer exec --nv \
     --cleanenv \
     --env PYTHONNOUSERSITE=1 \
     --env HF_HUB_OFFLINE=1 \
-    --bind /project/tn999991-cstu:/project/tn999991-cstu \
+    --bind "$PROJECT_DIR:$PROJECT_DIR" \
     "$SIF" \
     vllm serve "$WEIGHTS/$CHAT_MODEL" \
         --served-model-name "$CHAT_MODEL" \
