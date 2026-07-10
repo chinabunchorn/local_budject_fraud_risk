@@ -11,10 +11,15 @@ Read all three before scaffolding or making architectural decisions.
 ## Non-negotiable constraints
 
 1. **LANTA HPC lifecycle.** All LLM inference runs in vLLM inside an Apptainer container under
-   Slurm on the LANTA supercomputer. Compute nodes are air-gapped (no internet) and jobs are
-   killed at 24–48 h walltime. Never write code that assumes a permanent endpoint inside LANTA,
-   and never fetch models/packages at runtime on compute nodes — everything is pre-staged to
-   Lustre from the transfer node.
+   Slurm on the LANTA supercomputer. Compute nodes are air-gapped (no internet) and jobs die at
+   partition walltime (verified: `gpu` caps at 5 days; `gpu-devel` at 2 h — never use it for
+   serving). Never write code that assumes a permanent endpoint inside LANTA, and never fetch
+   models/packages at runtime on compute nodes — everything is pre-staged to Lustre from the
+   transfer node (the only node with outbound internet). `scrontab` is DISABLED on LANTA; job
+   resubmission runs from the app VM. LANTA enforces password + Google 2FA on EVERY SSH
+   connection — unattended automation (tunnel keepalive, cron resubmission, Prefect sbatch) is
+   blocked until ThaiSC confirms a deploy-key exemption, so treat those as manual runbook steps.
+   Hands-on verified facts and gotchas: `hpc/LANTA_CONFIG_NOTES.md` — read it before touching `hpc/`.
 2. **Offline-first.** The dashboard must be fully functional with ZERO running Slurm jobs — it
    reads only pre-computed, guardrails-validated JSON from PostgreSQL. The chatbot is the ONLY
    feature allowed to call live inference, through an SSH tunnel
@@ -44,9 +49,12 @@ Read all three before scaffolding or making architectural decisions.
 - **Batch:** Prefect 3 flows on the app VM; they drive `sbatch` / `squeue` / SFTP over SSH to the
   LANTA login node
 - **Parsing:** Docling (born-digital) + Typhoon-OCR 1.5 via vLLM (scanned/garbled) + PyThaiNLP
-- **Models:** `scb10x/typhoon2.5-qwen3-30b-a3b` (primary, all roles initially);
-  `Qwen/Qwen3-32B` AWQ-INT4 (batch analyst — add ONLY if Phase-2 quality evals justify it);
-  `scb10x/typhoon-ocr1.5-2b` (OCR). A100 40GB = Ampere: use BF16 or AWQ/GPTQ-INT4, never FP8/GGUF.
+- **Models:** `scb10x/typhoon2.5-qwen3-30b-a3b` (primary, all roles initially — staged, verified
+  serving with TP2 + `--max-model-len 8192`); `Qwen/Qwen3-32B` AWQ-INT4 (batch analyst — NOT
+  staged; download ONLY if Phase-2 quality evals justify it); `scb10x/typhoon-ocr1.5-2b` (OCR —
+  staged, verified on real scanned Thai documents). A100 40GB = Ampere: use BF16 or AWQ/GPTQ-INT4,
+  never FP8/GGUF. LANTA's GPU driver supports CUDA ≤ 12.7: use the verified container image
+  `vllm/vllm-openai:v0.11.0` (first tag with Qwen3-VL for the OCR model) — never `latest`.
 - **Observability:** Langfuse v3 (self-hosted) traces EVERY LLM call (batch and chat);
   Prometheus + Grafana for vLLM/API metrics
 - **Rejected — do not reintroduce:** Marker (weights license), ApeRAG, Elasticsearch, Qdrant,
@@ -105,16 +113,31 @@ mission3/
 - Python 3.11+, fully type-hinted, ruff + pytest; TypeScript strict mode. Thai prompt templates
   live in `pipelines/prompts/` as versioned files.
 
-## Current status & first tasks (see docs/ROADMAP.md — we are at Phase 0 → 1)
+## Current status & next tasks (see docs/ROADMAP.md — Phases 0–1 DONE, we are at Phase 2)
 
-1. Scaffold the repository layout above; init git; write `.env.example` and `README.md`.
-2. `docker-compose.yml` for the app zone (traefik, postgres+pgvector, redis, minio, langfuse,
-   tei with BGE-M3) with healthchecks; verify `docker compose up -d` comes up clean.
-3. Implement `shared/schemas` — the enum-locked `RiskResult` Pydantic contract — WITH tests.
-   This contract gates everything downstream; do it before any pipeline code.
-4. Alembic setup + initial migration: sub_districts, projects, budget_lines, documents, chunks
-   (vector), regulations, risk_results (JSONB), auditor_feedback.
-5. `hpc/` skeleton: `vllm.def`, `serve_vllm.sbatch`, `batch_infer.sbatch`, `stage_weights.sh`,
-   `tunnel.sh` — with clearly marked placeholders for LANTA account/partition/paths (Phase 1 is
-   executed manually on LANTA first, then automated via Prefect).
-6. Do not start Phase 2 pipeline flows until items 3–4 are merged and tested.
+**Done (July 2026).** Repo scaffolded and merged (PR #2); app-zone `docker-compose` verified
+healthy end-to-end (all 9 services, Thai embedding + rerank probes pass); `shared/schemas`
+enum-locked contract merged with 33 tests; Alembic initial migration applied. Phases 0–1
+executed by hand on LANTA and verified: weights staged (Typhoon 2.5 + Typhoon-OCR), vLLM
+serving with streaming + guided-choice enum lock reached through the SSH tunnel end-to-end,
+OCR batch validated on a real 33-page scanned Thai financial report, kill-and-recovery
+behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOTES.md`.
+
+**Open blockers:**
+- 2FA on every LANTA SSH blocks unattended automation — question pending with
+  thaisc-support@nstda.or.th. Until resolved, demo-window bring-up (submit → tunnel → smoke
+  test) is a manual runbook, and Prefect flows must treat LANTA I/O as manually-triggered steps.
+- Qwen3-32B AWQ deliberately NOT staged (roadmap "one model until forced otherwise").
+
+**Phase 2 tasks (now unblocked):**
+1. Assemble the mock corpus in MinIO (2–3 sub-districts, 10–20 projects, including scanned/
+   legacy-font nasty cases) + the regulation text — required input for everything below.
+2. Prefect ingestion flow: Docling extraction → garbled-text detection → Typhoon-OCR routing →
+   PyThaiNLP chunking → BGE-M3 embeddings (TEI) → pgvector upsert; regulations as own collection.
+3. Parsing quality gate on the nasty Thai PDFs BEFORE mass indexing.
+4. Risk-scoring batch: versioned Thai prompt templates per risk factor in `pipelines/prompts/`,
+   `guided_json` bound to `schemas.RiskAssessment`, temperature 0, staged over SFTP.
+5. Guardrails validation stage as the ONLY write path into `risk_results`.
+6. Langfuse tracing on every batch LLM call from day one.
+7. Decision point: eval Typhoon 2.5 scoring quality on a labeled sample; download and add
+   Qwen3-32B AWQ as batch analyst only if it measurably wins.
