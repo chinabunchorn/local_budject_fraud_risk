@@ -3,7 +3,10 @@
 Thai-language AI assistant for government auditors analyzing sub-district project budgets.
 Features: pre-computed risk dashboard, risk factor & trend analysis, RAG document chatbot with
 citations, regulation linkage (State Fiscal and Financial Discipline Act B.E. 2561), auditor
-feedback sentiment. Prototype scale: 2–3 mock sub-districts, 10–20 projects.
+feedback sentiment. Prototype scale: 2–3 sub-districts, 10–20 projects, curated from REAL
+gathered documents (decision July 2026 — real data over mock; see ROADMAP corpus decision).
+Sensitivity-check before ingest; synthetic anomaly projects added only if the real sample
+doesn't exercise the risk factors.
 
 Full design: `docs/ARCHITECTURE.md`. Build sequence: `docs/ROADMAP.md`. Diagrams: `docs/diagrams/`.
 Read all three before scaffolding or making architectural decisions.
@@ -96,7 +99,7 @@ mission3/
 ├── infra/
 │   └── db/                     # alembic migrations, init SQL (pgvector extension)
 └── data/
-    ├── mock_corpus/            # gitignored; canonical copy lives in MinIO
+    ├── corpus/                 # real documents; gitignored — canonical copy lives in MinIO
     └── regulations/            # fiscal-discipline act sections (text)
 ```
 
@@ -130,10 +133,16 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
 - Qwen3-32B AWQ deliberately NOT staged (roadmap "one model until forced otherwise").
 
 **Phase 2 tasks (now unblocked):**
-1. Assemble the mock corpus in MinIO (2–3 sub-districts, 10–20 projects, including scanned/
-   legacy-font nasty cases) + the regulation text — required input for everything below.
-2. Prefect ingestion flow: Docling extraction → garbled-text detection → Typhoon-OCR routing →
-   PyThaiNLP chunking → BGE-M3 embeddings (TEI) → pgvector upsert; regulations as own collection.
+1. Curate the corpus in MinIO from the real gathered documents (2–3 sub-districts, 10–20
+   projects — real scans/legacy-font cases come with it) + the regulation text — required input
+   for everything below. BEFORE ingest: sensitivity check (public-procurement status; pseudonymize
+   sub-district/vendor names in demo copy if non-public — real entities get risk flags, so
+   "flag, never accuse" applies doubly). Add synthetic anomaly projects ONLY if the real sample
+   doesn't exercise the risk factors (demo needs a LOW→HIGH verdict spread).
+2. Prefect ingestion flow: Docling extraction → garbled-text detection → Typhoon-OCR routing
+   (LANTA batch job: SFTP suspect pages to Lustre → sbatch → fetch markdown back; only these
+   pages ever leave the app VM) → PyThaiNLP chunking → BGE-M3 embeddings (TEI, local) →
+   pgvector upsert; regulations as own collection.
 3. Parsing quality gate on the nasty Thai PDFs BEFORE mass indexing.
 4. Risk-scoring batch: versioned Thai prompt templates per risk factor in `pipelines/prompts/`,
    `guided_json` bound to `schemas.RiskAssessment`, temperature 0, staged over SFTP.
