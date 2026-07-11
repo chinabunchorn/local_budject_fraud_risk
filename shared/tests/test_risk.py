@@ -7,7 +7,23 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from schemas import RiskAssessment, RiskFactor, RiskFactorType, RiskLevel, RiskResult
+from schemas import (
+    ReasoningStep,
+    ReasoningStepType,
+    RiskAssessment,
+    RiskFactor,
+    RiskFactorType,
+    RiskLevel,
+    RiskResult,
+)
+
+
+def make_step(**overrides) -> dict:
+    base = {
+        "step_type": "OBSERVATION",
+        "text_th": "งบประมาณสูงกว่าค่ากลางของโครงการประเภทเดียวกัน",
+    }
+    return {**base, **overrides}
 
 
 def make_factor(**overrides) -> dict:
@@ -16,6 +32,14 @@ def make_factor(**overrides) -> dict:
         "score": 72.5,
         "weight": 1.0,
         "rationale_th": "งบประมาณสูงกว่าค่ากลางของโครงการประเภทเดียวกันอย่างมีนัยสำคัญ",
+        "reasoning_steps": [
+            make_step(step_type="EVIDENCE", text_th="ตรวจสอบรายการงบประมาณ 12 รายการ"),
+            make_step(),
+            make_step(
+                step_type="INTERPRETATION",
+                text_th="อาจเข้าข่ายความเบี่ยงเบนที่ควรตรวจสอบเพิ่มเติม",
+            ),
+        ],
     }
     return {**base, **overrides}
 
@@ -112,6 +136,50 @@ class TestFactorTypes:
     def test_unknown_factor_type_rejected(self):
         with pytest.raises(ValidationError):
             RiskFactor.model_validate(make_factor(factor_type="VIBES"))
+
+
+class TestReasoningChain:
+    """The frontend reasoning panel shows ONLY this validated chain — the raw
+    <think> trace never reaches the contract (Langfuse only)."""
+
+    def test_closed_step_taxonomy(self):
+        assert {m.value for m in ReasoningStepType} == {
+            "EVIDENCE",
+            "OBSERVATION",
+            "INTERPRETATION",
+        }
+
+    def test_unknown_step_type_rejected(self):
+        with pytest.raises(ValidationError):
+            ReasoningStep.model_validate(make_step(step_type="VERDICT"))
+
+    def test_at_least_one_step_required(self):
+        with pytest.raises(ValidationError):
+            RiskFactor.model_validate(make_factor(reasoning_steps=[]))
+
+    def test_empty_step_text_rejected(self):
+        with pytest.raises(ValidationError):
+            ReasoningStep.model_validate(make_step(text_th=""))
+
+    def test_no_free_text_verdict_slot_in_steps(self):
+        """extra='forbid' — the model cannot smuggle a conclusion field into a step."""
+        with pytest.raises(ValidationError):
+            ReasoningStep.model_validate(make_step(verdict="anything"))
+
+    def test_guided_json_schema_locks_step_types(self):
+        schema = RiskAssessment.model_json_schema()
+        step_schema = schema["$defs"]["ReasoningStepType"]
+        assert set(step_schema["enum"]) == {"EVIDENCE", "OBSERVATION", "INTERPRETATION"}
+        assert schema["$defs"]["ReasoningStep"]["additionalProperties"] is False
+
+    def test_step_order_preserved_roundtrip(self):
+        factor = RiskFactor.model_validate(make_factor())
+        restored = RiskFactor.model_validate_json(factor.model_dump_json())
+        assert [s.step_type for s in restored.reasoning_steps] == [
+            ReasoningStepType.EVIDENCE,
+            ReasoningStepType.OBSERVATION,
+            ReasoningStepType.INTERPRETATION,
+        ]
 
 
 class TestRiskResult:

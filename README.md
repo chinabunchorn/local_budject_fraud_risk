@@ -3,7 +3,8 @@
 Thai-language AI assistant for government auditors analyzing sub-district project budgets:
 a pre-computed **risk dashboard**, risk factor & trend analysis, a **RAG document chatbot**
 with citations, regulation linkage (State Fiscal and Financial Discipline Act B.E. 2561),
-and auditor feedback sentiment. Prototype scale: 2–3 mock sub-districts, 10–20 projects.
+and auditor feedback sentiment. Prototype scale: 2–3 sub-districts, 10–20 projects, curated
+from real gathered documents (sensitivity-checked before ingest).
 
 > **Responsible AI — "flag, never accuse."** The system flags risk for human auditors; it
 > never states fraud or corruption as a conclusion. Risk verdicts are a closed enum enforced
@@ -34,7 +35,7 @@ Full design: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · build sequence:
 | `hpc/` | Everything that runs on LANTA: Apptainer def, Slurm scripts, tunnel/staging helpers |
 | `infra/db/` | Alembic migrations + init SQL (pgvector extension) |
 | `docs/` | Architecture, roadmap, diagrams, ops runbooks |
-| `data/` | `regulations/` (versioned) and `mock_corpus/` (gitignored; canonical copy in MinIO) |
+| `data/` | `regulations/` (versioned) and `corpus/` (real documents; gitignored — canonical copy in MinIO) |
 
 ## Quick start (app zone)
 

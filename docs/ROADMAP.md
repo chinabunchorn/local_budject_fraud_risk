@@ -3,6 +3,8 @@
 
 **Scope decision locked:** Marker and ApeRAG are rejected. The stack is the approved architecture — Next.js / FastAPI / LangGraph / PostgreSQL+pgvector / Prefect / Guardrails AI / Langfuse in the Application Zone; vLLM in Apptainer under Slurm on LANTA; Docling + Typhoon-OCR 1.5 for parsing.
 
+**Corpus decision (July 2026):** the prototype runs on REAL gathered sub-district documents, not a fabricated mock corpus — real scans and legacy-font PDFs are exactly what the parsing quality gate and risk prompts must be tuned against. Two conditions: (1) sensitivity check before ingest — confirm public-procurement status and pseudonymize sub-district/vendor names in demo copy if needed, since the system attaches risk flags to real entities; (2) curate a prototype-scale subset (2–3 sub-districts, 10–20 projects) and add synthetic anomaly projects only if the real sample doesn't exercise the risk factors.
+
 ---
 
 ## Guiding Principles
@@ -47,9 +49,9 @@ Phases deliberately overlap: Phase 2 (pipeline code on the app VM) can start whi
 2. Validate the access mechanics by hand: SSH to the login node, `sbatch` a trivial GPU job (e.g., `nvidia-smi` inside a stock Apptainer image), SFTP a file in and out.
 3. Provision the Application Zone VM; stand up the empty Docker Compose skeleton: Traefik, PostgreSQL 16 + pgvector, Redis, MinIO, Langfuse. No app services yet.
 4. Create the repository, environment configs, and SSH key management for machine-to-LANTA automation (a dedicated deploy key, never personal credentials, stored as secrets on the app VM).
-5. Assemble the mock corpus: 2–3 sub-districts, 10–20 projects, budget spreadsheets, and PDFs — deliberately including the nasty cases (scanned pages, legacy Thai fonts with garbled text layers) plus the regulation text (State Fiscal and Financial Discipline Act sections).
+5. Assemble the corpus: 2–3 sub-districts, 10–20 projects, budget spreadsheets, and PDFs, curated from the real gathered documents (which naturally include the nasty cases — scanned pages, legacy Thai fonts with garbled text layers) plus the regulation text (State Fiscal and Financial Discipline Act sections). *(Deferred in practice: real data was still being gathered during Phase 0; this executes at the start of Phase 2 under the corpus decision above.)*
 
-**Exit gate:** a GPU job runs on LANTA on demand; files move both directions; `psql` and MinIO respond on the app VM; the mock corpus is versioned in MinIO.
+**Exit gate:** a GPU job runs on LANTA on demand; files move both directions; `psql` and MinIO respond on the app VM; the corpus is versioned in MinIO (deferred to Phase 2 start).
 
 **Why first:** every later phase silently assumes these paths work. Discovering a quota or partition problem in week 4 is a schedule disaster; discovering it in week 1 is an email to ThaiSC support.
 
@@ -75,13 +77,15 @@ Phases deliberately overlap: Phase 2 (pipeline code on the app VM) can start whi
 
 ## Phase 2 — Offline Batch Ingestion & Risk Pre-Computation (~Weeks 2–3)
 
-**Goal:** one command turns the raw mock corpus into validated, structured risk JSON and a searchable vector index in PostgreSQL. This is the backbone of the entire product.
+**Goal:** one command turns the raw corpus (real gathered documents — see corpus decision at top) into validated, structured risk JSON and a searchable vector index in PostgreSQL. This is the backbone of the entire product.
+
+**Precondition (moved from Phase 0 step 5):** curate the real corpus into MinIO — sensitivity check, prototype-scale subset, regulation text alongside; synthetic anomaly backfill only if the real sample lacks risk-factor coverage.
 
 1. Design the PostgreSQL schema: sub-districts, projects, budget lines, documents, chunks (pgvector), regulations, `risk_results` (JSONB), auditor feedback. Freeze the Pydantic risk schema — it is the contract between batch job, guardrails, database, and dashboard.
-2. Build the Prefect ingestion flow on the app VM: Docling extraction → garbled-text detection → route scanned/suspect pages to Typhoon-OCR (running on LANTA via the Phase-1 endpoint) → PyThaiNLP chunking with metadata → BGE-M3 embeddings via TEI → pgvector upsert. Ingest the regulation corpus as its own collection.
+2. Build the Prefect ingestion flow on the app VM: Docling extraction → garbled-text detection → route scanned/suspect pages to Typhoon-OCR on LANTA (as a batch job — SFTP page files to Lustre `documents/`, `sbatch`, fetch markdown back; not the live endpoint — see `hpc/LANTA_CONFIG_NOTES.md`) → PyThaiNLP chunking with metadata → BGE-M3 embeddings via TEI → pgvector upsert. Ingest the regulation corpus as its own collection.
 3. Run a parsing quality review on the nasty Thai PDFs and fix routing thresholds now — bad text discovered after indexing poisons everything downstream.
-4. Build the risk-scoring batch: prompt templates per risk factor (budget deviation, vendor concentration, timeline anomalies, threshold-splitting patterns, document completeness), regulation cross-referencing, and auditor-feedback sentiment — all via guided JSON at temperature 0, staged over SFTP, executed inside the walltime window.
-5. Build the Guardrails validation stage (schema, score ranges, non-accusation lexicon, regulation references resolve) as the *only* write path into `risk_results`.
+4. Build the risk-scoring batch: prompt templates per risk factor (budget deviation, vendor concentration, timeline anomalies, threshold-splitting patterns, document completeness), regulation cross-referencing, and auditor-feedback sentiment — all via guided JSON at temperature 0, staged over SFTP, executed inside the walltime window. Each factor emits its typed reasoning chain (`reasoning_steps`: evidence → observation → interpretation) *inside* the guided schema — this is what the frontend displays as "how the model got the answer." The raw `<think>` trace is captured to Langfuse only (verify the pinned vLLM v0.11.0 reasoning-parser + guided-JSON combination during the first batch run; if they conflict, disable thinking mode for batch scoring — the structured steps are the product surface either way).
+5. Build the Guardrails validation stage (schema, score ranges, non-accusation lexicon — covering `summary_th`, factor rationales, and every `reasoning_steps` text — regulation references resolve) as the *only* write path into `risk_results`.
 6. Wire Langfuse tracing into every batch LLM call from day one — retrofitting observability is miserable.
 7. Decision point: evaluate Typhoon 2.5's scoring quality on a labeled sample; add Qwen3-32B AWQ as the batch analyst only if it measurably wins.
 
@@ -94,7 +98,7 @@ Phases deliberately overlap: Phase 2 (pipeline code on the app VM) can start whi
 **Goal:** the auditor-facing product is fully usable with LANTA completely offline.
 
 1. FastAPI read endpoints over `risk_results` and budget tables, with JWT auth and simple role checks (Auditor / Senior Auditor / Admin). Start with FastAPI-native JWT; keep Keycloak as a documented upgrade path rather than a week-3 dependency.
-2. Next.js dashboard: portfolio risk overview (heatmap), project drill-down with factor breakdown and linked regulation sections, time-series/trend views (SQL window functions — no LLM), and the feedback-sentiment panel.
+2. Next.js dashboard: portfolio risk overview (heatmap), project drill-down with factor breakdown, the model-reasoning panel (the validated `reasoning_steps` chain with citations — labeled as model-generated, never the raw thinking trace), linked regulation sections, time-series/trend views (SQL window functions — no LLM), and the feedback-sentiment panel.
 3. Redis caching on hot endpoints.
 4. Responsible-AI UI copy everywhere: flags are "High Risk / Anomaly / Requires Further Investigation," never verdicts; persistent disclaimer that the auditor decides.
 
@@ -121,11 +125,11 @@ Phases deliberately overlap: Phase 2 (pipeline code on the app VM) can start whi
 
 **Goal:** the system survives an adversarial reviewer and a live demo.
 
-1. Guardrails red-team: attempt to elicit accusatory language, fabricated citations, and out-of-scope legal conclusions; freeze the adversarial prompts into a regression suite that runs against every prompt or model change.
+1. Guardrails red-team: attempt to elicit accusatory language (including inside the displayed `reasoning_steps` chain), fabricated citations, and out-of-scope legal conclusions; freeze the adversarial prompts into a regression suite that runs against every prompt or model change.
 2. Observability finish: Grafana dashboards for vLLM (through the tunnel) and API latency; alert on tunnel loss.
 3. Ops runbook: demo-window checklist (submit job → verify tunnel → smoke test), recovery drill timings from Phase 1, and the resubmission automation under supervision.
 4. RBAC finalization and audit logging review (Keycloak now, if time allows and the demo needs multi-role storytelling).
-5. Demo narrative: seed one mock project with a clear, explainable high-risk story (e.g., repeated purchases just under a procurement threshold) so the factor breakdown, regulation link, and chatbot citation all land in one flow.
+5. Demo narrative: pick one project with a clear, explainable high-risk story (e.g., repeated purchases just under a procurement threshold) — a real one if the corpus provides it, otherwise a seeded synthetic project — so the factor breakdown, regulation link, and chatbot citation all land in one flow.
 6. Stretch goals only if green elsewhere: PostgreSQL full-text search with Thai tokenization for hybrid retrieval; regulation-linkage graph as plain PG tables built by the batch job.
 
 **Exit gate:** a full dress rehearsal — batch rerun, dashboard tour, live chat inside a real walltime window, one deliberate failure and recovery — executed by a team member who didn't build that component.
@@ -159,4 +163,4 @@ Phases deliberately overlap: Phase 2 (pipeline code on the app VM) can start whi
 
 ## Definition of Done (prototype)
 
-The prototype is done when: (1) the full mock corpus re-processes with one command; (2) the dashboard demos flawlessly with zero running Slurm jobs; (3) the chatbot answers Thai questions with verifiable citations inside a walltime window and degrades gracefully outside it; (4) the red-team regression suite passes; and (5) someone other than the author can execute the demo-window runbook.
+The prototype is done when: (1) the full corpus re-processes with one command; (2) the dashboard demos flawlessly with zero running Slurm jobs; (3) the chatbot answers Thai questions with verifiable citations inside a walltime window and degrades gracefully outside it; (4) the red-team regression suite passes; and (5) someone other than the author can execute the demo-window runbook.

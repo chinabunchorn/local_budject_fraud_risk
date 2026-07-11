@@ -21,9 +21,9 @@ node_modules/
 out/
 *.tsbuildinfo
 
-# Mock corpus is gitignored — canonical copy lives in MinIO
-data/mock_corpus/*
-!data/mock_corpus/.gitkeep
+# Corpus (real documents) is gitignored — canonical copy lives in MinIO
+data/corpus/*
+!data/corpus/.gitkeep
 
 # Model weights are never committed
 *.safetensors

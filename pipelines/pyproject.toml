@@ -1,0 +1,47 @@
+[project]
+name = "mission3-pipelines"
+version = "0.1.0"
+description = "Mission 3 offline batch pipelines — Prefect flows for ingestion, embeddings, risk scoring"
+requires-python = ">=3.11"
+dependencies = [
+    "mission3-shared",
+    "prefect>=3.0",
+    "pythainlp>=5.0",
+    "httpx>=0.27",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.1",
+    "pypdf>=5.0",
+    "minio>=7.2",
+    "pyyaml>=6.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+# Docling pulls torch (~GBs); install only where document parsing actually
+# runs: `uv sync --group parsing`
+parsing = [
+    "docling>=2.0",
+]
+
+[tool.uv.sources]
+mission3-shared = { path = "../shared", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["flows", "hpc_io", "common"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
