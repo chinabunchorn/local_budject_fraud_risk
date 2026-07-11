@@ -11,12 +11,19 @@ dependencies = [
     "sqlalchemy>=2.0",
     "psycopg[binary]>=3.1",
     "pypdf>=5.0",
+    "minio>=7.2",
+    "pyyaml>=6.0",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
     "ruff>=0.5",
+]
+# Docling pulls torch (~GBs); install only where document parsing actually
+# runs: `uv sync --group parsing`
+parsing = [
+    "docling>=2.0",
 ]
 
 [tool.uv.sources]

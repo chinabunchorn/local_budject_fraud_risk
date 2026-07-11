@@ -20,3 +20,19 @@ def database_url() -> str:
 
 def tei_embed_url() -> str:
     return os.environ.get("PIPELINES_TEI_EMBED_URL", "http://localhost:8081")
+
+
+def minio_endpoint() -> str:
+    # host:port, no scheme (MinIO SDK style)
+    return os.environ.get("PIPELINES_MINIO_ENDPOINT", "localhost:9000")
+
+
+def minio_credentials() -> tuple[str, str]:
+    return (
+        os.environ.get("MINIO_ROOT_USER", "mission3-minio"),
+        os.environ.get("MINIO_ROOT_PASSWORD", "change-me-minio"),
+    )
+
+
+def corpus_bucket() -> str:
+    return os.environ.get("MINIO_BUCKET_CORPUS", "corpus")
