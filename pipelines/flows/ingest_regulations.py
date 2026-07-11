@@ -22,6 +22,7 @@ from common.tei import TEIEmbedClient
 ACT_PDFS: dict[str, str] = {
     "The_Fiscal_Discipline_Act_2561.pdf": "fiscal-discipline-act-2561",
     "Procurement_Act_2560.pdf": "procurement-act-2560",
+    "ระเบียบกระทรวงการคลัง.pdf": "mof-procurement-regulation-2560",
 }
 
 _UPSERT = text(
@@ -46,7 +47,7 @@ def extract_sections(pdf_path: Path, act_code: str) -> list[ActSection]:
     numbers = [int(s.section_no) for s in sections if s.section_no.isdigit()]
     contiguous = numbers == list(range(1, len(numbers) + 1))
     get_run_logger().info(
-        "%s: %d rows (%d numbered sections, last มาตรา %s, contiguous=%s)",
+        "%s: %d rows (%d numbered sections, last no. %s, contiguous=%s)",
         act_code,
         len(sections),
         len(numbers),

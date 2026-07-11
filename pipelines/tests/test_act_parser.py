@@ -86,6 +86,42 @@ class TestSplitSections:
         assert by_no["4"].section_title_th == "หมวด ๑ บททั่วไป / ส่วนที่ ๑ วินัยการคลัง"
         assert by_no["5"].section_title_th == "บทเฉพาะกาล"
 
+    def test_regulation_document_splits_on_kho(self):
+        """ระเบียบ number their clauses ข้อ, end at ประกาศ ณ วันที่, and are
+        published in special gazette issues (ตอนพิเศษ header variant)."""
+        sample = (
+            "เล่ม ๑๓๔ ตอนพิเศษ ๒๑๐ ง ราชกิจจานุเบกษา ๒๓ สิงหาคม ๒๕๖๐\n"
+            "ระเบียบกระทรวงการคลัง\n"
+            "ว่าด้วยการจัดซื้อจัดจ้างและการบริหารพัสดุภาครัฐ พ.ศ. ๒๕๖๐\n"
+            "ข้อ ๑ ระเบียบนี้เรียกว่า “ระเบียบกระทรวงการคลัง...”\n"
+            "หมวด ๑\n"
+            "ข้อกำหนดทั่วไป\n"
+            "ส่วนที่ ๑\n"
+            "วงเงินการซื้อหรือจ้าง\n"
+            "การแบ่งซื้อหรือแบ่งจ้าง\n"  # unnumbered topic heading (3rd level)
+            "ข้อ ๒ ห้ามมิให้แบ่งซื้อหรือแบ่งจ้างโดยลดวงเงินที่จะซื้อหรือจ้างในครั้งเดียวกัน\n"
+            "ประกาศ ณ วันที่ ๒๓ สิงหาคม พ.ศ. ๒๕๖๐\n"
+            "อภิศักดิ์ ตันติวรวงศ์\n"
+            "บัญชีเอกสารแนบท้าย\n"
+            "๑. แบบประกาศเชิญชวน\n"
+        )
+        clean = clean_page_text(sample)
+        assert "ตอนพิเศษ" not in clean  # header variant stripped
+        secs = split_sections(clean, "mof-procurement-regulation-2560")
+        by_no = {s.section_no: s for s in secs}
+        # topic heading became title context for ข้อ ๒ — NOT a phantom duplicate clause
+        assert [s.section_no for s in secs if s.section_no.isdigit()] == ["1", "2"]
+        assert by_no["2"].regulation_code == "mof-procurement-regulation-2560/k.2"
+        assert (
+            by_no["2"].section_title_th
+            == "หมวด ๑ ข้อกำหนดทั่วไป / ส่วนที่ ๑ วงเงินการซื้อหรือจ้าง / การแบ่งซื้อหรือแบ่งจ้าง"
+        )
+        assert "แบ่งซื้อ" in by_no["2"].text
+        # promulgation block and attachment list are not law text
+        joined = "\n".join(s.text for s in secs)
+        assert "ประกาศ ณ วันที่" not in joined
+        assert "บัญชีเอกสารแนบท้าย" not in joined
+
     def test_countersignature_dropped_end_note_kept(self):
         all_text = "\n".join(s.text for s in sections())
         assert "ผู้รับสนองพระราชโองการ" not in all_text

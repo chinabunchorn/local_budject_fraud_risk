@@ -21,25 +21,59 @@ from pathlib import Path
 
 from pythainlp.util import normalize as thai_normalize
 
-# Known acts: code → official Thai name. The code is the regulation_code
-# prefix that RegulationReference citations resolve against.
-ACTS: dict[str, str] = {
-    "fiscal-discipline-act-2561": "พระราชบัญญัติวินัยการเงินการคลังของรัฐ พ.ศ. ๒๕๖๑",
-    "procurement-act-2560": "พระราชบัญญัติการจัดซื้อจัดจ้างและการบริหารพัสดุภาครัฐ พ.ศ. ๒๕๖๐",
+
+@dataclass(frozen=True)
+class ActSpec:
+    """How one legal document is structured.
+
+    พ.ร.บ. (acts) number their sections มาตรา → code prefix "s.";
+    ระเบียบ (ministerial regulations) number theirs ข้อ → code prefix "k.".
+    """
+
+    name_th: str
+    section_word: str = "มาตรา"
+    code_prefix: str = "s."
+
+
+# Known documents: code → spec. The code is the regulation_code prefix that
+# RegulationReference citations resolve against.
+ACTS: dict[str, ActSpec] = {
+    "fiscal-discipline-act-2561": ActSpec(
+        name_th="พระราชบัญญัติวินัยการเงินการคลังของรัฐ พ.ศ. ๒๕๖๑",
+    ),
+    "procurement-act-2560": ActSpec(
+        name_th="พระราชบัญญัติการจัดซื้อจัดจ้างและการบริหารพัสดุภาครัฐ พ.ศ. ๒๕๖๐",
+    ),
+    "mof-procurement-regulation-2560": ActSpec(
+        name_th="ระเบียบกระทรวงการคลังว่าด้วยการจัดซื้อจัดจ้างและการบริหารพัสดุภาครัฐ พ.ศ. ๒๕๖๐",
+        section_word="ข้อ",
+        code_prefix="k.",
+    ),
 }
 
 # Thai combining marks: upper/lower vowels, tone marks, thanthakhat, nikhahit
 _THAI_COMBINING = "ัิ-ฺ็-๎"
 _SPACE_BEFORE_COMBINING = re.compile(rf"[ \t]+([{_THAI_COMBINING}])")
 
-# ราชกิจจานุเบกษา page furniture, e.g. "หน้า   ๓" / "เล่ม ๑๓๕ ตอนที่ ๒๗ ก ราชกิจจานุเบกษา ..."
-_PAGE_HEADER = re.compile(r"^\s*(หน้า\s+[๐-๙]+\s*$|เล่ม\s+[๐-๙]+\s+ตอนที่\s+.*ราชกิจจานุเบกษา)")
+# ราชกิจจานุเบกษา page furniture, e.g. "หน้า   ๓" / "เล่ม ๑๓๕ ตอนที่ ๒๗ ก ..."
+# / "เล่ม ๑๓๔ ตอนพิเศษ ๒๑๐ ง ..." (ระเบียบ are published in special issues)
+_PAGE_HEADER = re.compile(
+    r"^\s*(หน้า\s+[๐-๙]+\s*$|เล่ม\s+[๐-๙]+\s+ตอน(ที่|พิเศษ)\s+.*ราชกิจจานุเบกษา)"
+)
 
-_SECTION_START = re.compile(r"^\s*มาตรา\s+([๐-๙]+)\b")
 _CHAPTER_START = re.compile(r"^\s*(หมวด\s+[๐-๙]+|บทเฉพาะกาล)\s*$")
 _PART_START = re.compile(r"^\s*ส่วนที่\s+[๐-๙]+\s*$")
-_COUNTERSIGN = re.compile(r"^\s*ผู้รับสนองพระราชโองการ")
+# Body ends at the countersignature (พ.ร.บ.) or the promulgation date (ระเบียบ)
+_COUNTERSIGN = re.compile(r"^\s*(ผู้รับสนองพระราชโองการ|ประกาศ\s*ณ\s*วันที่)")
 _END_NOTE = re.compile(r"^\s*หมายเหตุ\s*:?-?")
+
+
+def _section_start(section_word: str) -> re.Pattern[str]:
+    return re.compile(rf"^\s*{section_word}\s+([๐-๙]+)\b")
+
+
+# มาตรา is also what a section-start looks like in heading-title lookahead
+_ANY_SECTION_START = re.compile(r"^\s*(มาตรา|ข้อ)\s+[๐-๙]+\b")
 
 _THAI_DIGITS = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 
@@ -55,13 +89,13 @@ class ActSection:
 
     @property
     def act_name_th(self) -> str:
-        return ACTS[self.act_code]
+        return ACTS[self.act_code].name_th
 
     @property
     def regulation_code(self) -> str:
         if self.section_no in ("preamble", "note"):
             return f"{self.act_code}/{self.section_no}"
-        return f"{self.act_code}/s.{self.section_no}"
+        return f"{self.act_code}/{ACTS[self.act_code].code_prefix}{self.section_no}"
 
 
 def clean_page_text(page_text: str) -> str:
@@ -96,7 +130,7 @@ def _is_heading_title(line: str) -> bool:
     return (
         bool(line)
         and len(line) <= 100
-        and not _SECTION_START.match(line)
+        and not _ANY_SECTION_START.match(line)
         and not _CHAPTER_START.match(line)
         and not _PART_START.match(line)
     )
@@ -105,6 +139,7 @@ def _is_heading_title(line: str) -> bool:
 def split_sections(act_text: str, act_code: str) -> list[ActSection]:
     if act_code not in ACTS:
         raise ValueError(f"unknown act_code {act_code!r}; add it to ACTS first")
+    section_start = _section_start(ACTS[act_code].section_word)
     sections: list[ActSection] = []
     chapter: str | None = None
     part: str | None = None
@@ -112,6 +147,12 @@ def split_sections(act_text: str, act_code: str) -> list[ActSection]:
     current_title: str | None = None
     current_lines: list[str] = []
     expected_next = 1  # monotonic guard against line-wrapped มาตรา references
+    # ระเบียบ have a third, unnumbered heading level: topic lines between a
+    # หมวด/ส่วนที่ block and its first clause (e.g. "การจัดทำร่างขอบเขตของงาน...").
+    # While in_gap, lines are topic context for the NEXT section — never body
+    # text of the previous one (that produced phantom duplicate clauses).
+    in_gap = False
+    gap_topic: list[str] = []
 
     def emit() -> None:
         text = "\n".join(current_lines).strip()
@@ -120,7 +161,8 @@ def split_sections(act_text: str, act_code: str) -> list[ActSection]:
         current_lines.clear()
 
     def heading() -> str | None:
-        parts = [p for p in (chapter, part) if p]
+        topic = " ".join(gap_topic) if gap_topic else None
+        parts = [p for p in (chapter, part, topic) if p]
         return " / ".join(parts) if parts else None
 
     lines = act_text.splitlines()
@@ -142,6 +184,8 @@ def split_sections(act_text: str, act_code: str) -> list[ActSection]:
         if _CHAPTER_START.match(line):
             emit()
             chapter, part = line.strip(), None
+            gap_topic.clear()
+            in_gap = True
             if i + 1 < n and _is_heading_title(lines[i + 1]):
                 chapter = f"{chapter} {lines[i + 1].strip()}"
                 i += 1
@@ -151,23 +195,30 @@ def split_sections(act_text: str, act_code: str) -> list[ActSection]:
         if _PART_START.match(line):
             emit()
             part = line.strip()
+            gap_topic.clear()
+            in_gap = True
             if i + 1 < n and _is_heading_title(lines[i + 1]):
                 part = f"{part} {lines[i + 1].strip()}"
                 i += 1
             i += 1
             continue
 
-        m = _SECTION_START.match(line)
+        m = section_start.match(line)
         if m and int(m.group(1).translate(_THAI_DIGITS)) == expected_next:
             emit()
             current_no = m.group(1).translate(_THAI_DIGITS)
             current_title = heading()
             expected_next += 1
+            in_gap = False
+            gap_topic.clear()
             current_lines.append(line.strip())
             i += 1
             continue
 
-        current_lines.append(line)
+        if in_gap:
+            gap_topic.append(line.strip())
+        else:
+            current_lines.append(line)
         i += 1
 
     emit()
