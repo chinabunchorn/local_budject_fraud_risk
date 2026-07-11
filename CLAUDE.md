@@ -35,7 +35,10 @@ Read all three before scaffolding or making architectural decisions.
    citation-existence, non-accusation lexicon). Never generate prompts, code, or UI copy that
    states fraud/corruption as a conclusion — ทุจริต / โกง / ฉ้อโกง / "fraud" / "corruption" as
    verdicts are banned (allowed only inside quoted regulation titles). Every surface states that
-   the human auditor makes the final decision.
+   the human auditor makes the final decision. Model reasoning shown in the UI ("how the model
+   got the answer") is ONLY the structured `reasoning_steps` chain (evidence → observation →
+   interpretation) emitted inside guided_json — grammar-constrained and lexicon-validated like
+   all free text. The raw `<think>` trace is NEVER user-facing: Langfuse only (debug/audit).
 4. **Primary language is Thai** for documents, prompts, chat, and UI. Use PyThaiNLP for
    segmentation. Always UTF-8. Test parsing against legacy-font (TH Sarabun era) and scanned
    PDFs; route garbled or scanned pages to Typhoon-OCR.
@@ -145,7 +148,9 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
    pgvector upsert; regulations as own collection.
 3. Parsing quality gate on the nasty Thai PDFs BEFORE mass indexing.
 4. Risk-scoring batch: versioned Thai prompt templates per risk factor in `pipelines/prompts/`,
-   `guided_json` bound to `schemas.RiskAssessment`, temperature 0, staged over SFTP.
+   `guided_json` bound to `schemas.RiskAssessment` (incl. per-factor `reasoning_steps` — the
+   validated chain the frontend displays), temperature 0, staged over SFTP. Raw `<think>` traces
+   go to Langfuse only — never into `risk_results`, never to the UI.
 5. Guardrails validation stage as the ONLY write path into `risk_results`.
 6. Langfuse tracing on every batch LLM call from day one.
 7. Decision point: eval Typhoon 2.5 scoring quality on a labeled sample; download and add

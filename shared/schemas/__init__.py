@@ -7,6 +7,8 @@ Never duplicate a schema definition elsewhere.
 from schemas.chunk import EMBEDDING_DIM, Chunk, Citation
 from schemas.feedback import Feedback, FeedbackSentiment
 from schemas.risk import (
+    ReasoningStep,
+    ReasoningStepType,
     RegulationReference,
     RiskAssessment,
     RiskFactor,
@@ -21,6 +23,8 @@ __all__ = [
     "Citation",
     "Feedback",
     "FeedbackSentiment",
+    "ReasoningStep",
+    "ReasoningStepType",
     "RegulationReference",
     "RiskAssessment",
     "RiskFactor",

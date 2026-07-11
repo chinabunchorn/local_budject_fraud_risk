@@ -6,8 +6,14 @@ incapable of holding an accusation. `RiskResult` adds pipeline provenance and
 is the shape stored in the `risk_results` JSONB column. The guardrails
 validation stage is the ONLY write path into that table.
 
-Free-text fields (`summary_th`, `rationale_th`) are re-checked post-hoc by the
-guardrails non-accusation lexicon; this module enforces structure and ranges.
+Free-text fields (`summary_th`, `rationale_th`, `ReasoningStep.text_th`) are
+re-checked post-hoc by the guardrails non-accusation lexicon; this module
+enforces structure and ranges.
+
+The reasoning chain shown in the frontend is `RiskFactor.reasoning_steps` —
+typed, ordered steps emitted INSIDE guided_json, so every displayed word is
+grammar-constrained and lexicon-validated. The model's raw `<think>` trace is
+never user-facing: it goes to Langfuse only (debug/audit).
 """
 
 from __future__ import annotations
@@ -53,6 +59,16 @@ class RiskFactorType(StrEnum):
     DOCUMENT_COMPLETENESS = "DOCUMENT_COMPLETENESS"
 
 
+class ReasoningStepType(StrEnum):
+    """Closed taxonomy for the displayable reasoning chain: evidence first,
+    interpretation last. INTERPRETATION states what a pattern MAY indicate —
+    it is never a verdict (the verdict lives only in the `RiskLevel` enum)."""
+
+    EVIDENCE = "EVIDENCE"  # what was examined (documents, budget lines)
+    OBSERVATION = "OBSERVATION"  # what stood out in that evidence
+    INTERPRETATION = "INTERPRETATION"  # what it may indicate — never a verdict
+
+
 Score = Annotated[float, Field(ge=0, le=100)]
 Weight = Annotated[float, Field(ge=0, le=1)]
 
@@ -69,6 +85,17 @@ class RegulationReference(BaseModel):
     relevance_th: str = Field(min_length=1)
 
 
+class ReasoningStep(BaseModel):
+    """One step of the reasoning chain displayed in the dashboard drill-down.
+    Emitted inside guided_json — the validated substitute for raw CoT."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    step_type: ReasoningStepType
+    text_th: str = Field(min_length=1)
+    citations: list[Citation] = Field(default_factory=list)
+
+
 class RiskFactor(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -76,6 +103,7 @@ class RiskFactor(BaseModel):
     score: Score
     weight: Weight
     rationale_th: str = Field(min_length=1)
+    reasoning_steps: list[ReasoningStep] = Field(min_length=1)
     citations: list[Citation] = Field(default_factory=list)
 
 

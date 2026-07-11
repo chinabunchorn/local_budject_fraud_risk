@@ -84,8 +84,8 @@ Phases deliberately overlap: Phase 2 (pipeline code on the app VM) can start whi
 1. Design the PostgreSQL schema: sub-districts, projects, budget lines, documents, chunks (pgvector), regulations, `risk_results` (JSONB), auditor feedback. Freeze the Pydantic risk schema — it is the contract between batch job, guardrails, database, and dashboard.
 2. Build the Prefect ingestion flow on the app VM: Docling extraction → garbled-text detection → route scanned/suspect pages to Typhoon-OCR on LANTA (as a batch job — SFTP page files to Lustre `documents/`, `sbatch`, fetch markdown back; not the live endpoint — see `hpc/LANTA_CONFIG_NOTES.md`) → PyThaiNLP chunking with metadata → BGE-M3 embeddings via TEI → pgvector upsert. Ingest the regulation corpus as its own collection.
 3. Run a parsing quality review on the nasty Thai PDFs and fix routing thresholds now — bad text discovered after indexing poisons everything downstream.
-4. Build the risk-scoring batch: prompt templates per risk factor (budget deviation, vendor concentration, timeline anomalies, threshold-splitting patterns, document completeness), regulation cross-referencing, and auditor-feedback sentiment — all via guided JSON at temperature 0, staged over SFTP, executed inside the walltime window.
-5. Build the Guardrails validation stage (schema, score ranges, non-accusation lexicon, regulation references resolve) as the *only* write path into `risk_results`.
+4. Build the risk-scoring batch: prompt templates per risk factor (budget deviation, vendor concentration, timeline anomalies, threshold-splitting patterns, document completeness), regulation cross-referencing, and auditor-feedback sentiment — all via guided JSON at temperature 0, staged over SFTP, executed inside the walltime window. Each factor emits its typed reasoning chain (`reasoning_steps`: evidence → observation → interpretation) *inside* the guided schema — this is what the frontend displays as "how the model got the answer." The raw `<think>` trace is captured to Langfuse only (verify the pinned vLLM v0.11.0 reasoning-parser + guided-JSON combination during the first batch run; if they conflict, disable thinking mode for batch scoring — the structured steps are the product surface either way).
+5. Build the Guardrails validation stage (schema, score ranges, non-accusation lexicon — covering `summary_th`, factor rationales, and every `reasoning_steps` text — regulation references resolve) as the *only* write path into `risk_results`.
 6. Wire Langfuse tracing into every batch LLM call from day one — retrofitting observability is miserable.
 7. Decision point: evaluate Typhoon 2.5's scoring quality on a labeled sample; add Qwen3-32B AWQ as the batch analyst only if it measurably wins.
 
@@ -98,7 +98,7 @@ Phases deliberately overlap: Phase 2 (pipeline code on the app VM) can start whi
 **Goal:** the auditor-facing product is fully usable with LANTA completely offline.
 
 1. FastAPI read endpoints over `risk_results` and budget tables, with JWT auth and simple role checks (Auditor / Senior Auditor / Admin). Start with FastAPI-native JWT; keep Keycloak as a documented upgrade path rather than a week-3 dependency.
-2. Next.js dashboard: portfolio risk overview (heatmap), project drill-down with factor breakdown and linked regulation sections, time-series/trend views (SQL window functions — no LLM), and the feedback-sentiment panel.
+2. Next.js dashboard: portfolio risk overview (heatmap), project drill-down with factor breakdown, the model-reasoning panel (the validated `reasoning_steps` chain with citations — labeled as model-generated, never the raw thinking trace), linked regulation sections, time-series/trend views (SQL window functions — no LLM), and the feedback-sentiment panel.
 3. Redis caching on hot endpoints.
 4. Responsible-AI UI copy everywhere: flags are "High Risk / Anomaly / Requires Further Investigation," never verdicts; persistent disclaimer that the auditor decides.
 
@@ -125,7 +125,7 @@ Phases deliberately overlap: Phase 2 (pipeline code on the app VM) can start whi
 
 **Goal:** the system survives an adversarial reviewer and a live demo.
 
-1. Guardrails red-team: attempt to elicit accusatory language, fabricated citations, and out-of-scope legal conclusions; freeze the adversarial prompts into a regression suite that runs against every prompt or model change.
+1. Guardrails red-team: attempt to elicit accusatory language (including inside the displayed `reasoning_steps` chain), fabricated citations, and out-of-scope legal conclusions; freeze the adversarial prompts into a regression suite that runs against every prompt or model change.
 2. Observability finish: Grafana dashboards for vLLM (through the tunnel) and API latency; alert on tunnel loss.
 3. Ops runbook: demo-window checklist (submit job → verify tunnel → smoke test), recovery drill timings from Phase 1, and the resubmission automation under supervision.
 4. RBAC finalization and audit logging review (Keycloak now, if time allows and the demo needs multi-role storytelling).
