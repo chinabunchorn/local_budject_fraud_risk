@@ -1,6 +1,10 @@
 """Unit tests for the Act parser — synthetic text covering every known artifact."""
 
-from common.act_parser import ACT_CODE, clean_page_text, split_sections
+import pytest
+
+from common.act_parser import clean_page_text, split_sections
+
+ACT_CODE = "fiscal-discipline-act-2561"
 
 SAMPLE = """\
 พระราชบัญญัติ
@@ -25,7 +29,7 @@ SAMPLE = """\
 
 
 def sections():
-    return split_sections(SAMPLE)
+    return split_sections(SAMPLE, ACT_CODE)
 
 
 class TestCleanPageText:
@@ -58,6 +62,15 @@ class TestSplitSections:
     def test_regulation_code_format(self):
         by_no = {s.section_no: s for s in sections()}
         assert by_no["4"].regulation_code == f"{ACT_CODE}/s.4"
+
+    def test_regulation_code_carries_act(self):
+        procurement = split_sections(SAMPLE, "procurement-act-2560")
+        assert procurement[1].regulation_code == "procurement-act-2560/s.1"
+        assert "จัดซื้อจัดจ้าง" in procurement[1].act_name_th
+
+    def test_unknown_act_code_rejected(self):
+        with pytest.raises(ValueError, match="unknown act_code"):
+            split_sections(SAMPLE, "some-other-act")
 
     def test_wrapped_reference_does_not_split(self):
         """"มาตรา ๒" at a wrapped-line start inside มาตรา ๓ is a reference, not a section."""

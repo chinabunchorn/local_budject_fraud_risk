@@ -1,10 +1,10 @@
-"""Regulation-corpus ingestion: Act PDF → sections → BGE-M3 → pgvector.
+"""Regulation-corpus ingestion: Act PDFs → sections → BGE-M3 → pgvector.
 
 Idempotent: rows upsert on `regulation_code`, so re-running the flow after a
 parser or PDF change refreshes the index in place. `RegulationReference`
 citations from risk scoring resolve against exactly these codes
-(e.g. "fiscal-discipline-act-2561/s.37") — this flow is what makes the
-guardrails citation-existence check meaningful.
+(e.g. "procurement-act-2560/s.96") — this flow is what makes the guardrails
+citation-existence check meaningful.
 """
 
 from __future__ import annotations
@@ -14,9 +14,15 @@ from pathlib import Path
 from prefect import flow, get_run_logger, task
 from sqlalchemy import create_engine, text
 
-from common.act_parser import ACT_NAME_TH, ActSection, parse_act
+from common.act_parser import ActSection, parse_act
 from common.settings import database_url, tei_embed_url
 from common.tei import TEIEmbedClient
+
+# PDF filename in data/regulations/ → act code (see act_parser.ACTS)
+ACT_PDFS: dict[str, str] = {
+    "The_Fiscal_Discipline_Act_2561.pdf": "fiscal-discipline-act-2561",
+    "Procurement_Act_2560.pdf": "procurement-act-2560",
+}
 
 _UPSERT = text(
     """
@@ -35,15 +41,23 @@ _UPSERT = text(
 
 
 @task
-def extract_sections(pdf_path: Path) -> list[ActSection]:
-    sections = parse_act(pdf_path)
-    numbered = [s for s in sections if s.section_no.isdigit()]
+def extract_sections(pdf_path: Path, act_code: str) -> list[ActSection]:
+    sections = parse_act(pdf_path, act_code)
+    numbers = [int(s.section_no) for s in sections if s.section_no.isdigit()]
+    contiguous = numbers == list(range(1, len(numbers) + 1))
     get_run_logger().info(
-        "parsed %d rows (%d numbered sections, last มาตรา %s)",
+        "%s: %d rows (%d numbered sections, last มาตรา %s, contiguous=%s)",
+        act_code,
         len(sections),
-        len(numbered),
-        numbered[-1].section_no if numbered else "-",
+        len(numbers),
+        numbers[-1] if numbers else "-",
+        contiguous,
     )
+    if not contiguous:
+        raise ValueError(
+            f"{act_code}: section numbers not contiguous — parser missed or "
+            f"false-split a มาตรา; refusing to index a broken act"
+        )
     return sections
 
 
@@ -71,7 +85,7 @@ def upsert_sections(sections: list[ActSection], vectors: list[list[float]]) -> i
                 _UPSERT,
                 {
                     "code": section.regulation_code,
-                    "act": ACT_NAME_TH,
+                    "act": section.act_name_th,
                     "sec": section.section_no,
                     "title": section.section_title_th,
                     "text": section.text,
@@ -83,14 +97,21 @@ def upsert_sections(sections: list[ActSection], vectors: list[list[float]]) -> i
 
 
 @flow(name="ingest-regulations")
-def ingest_regulations(
-    pdf_path: str = "../data/regulations/The_Fiscal_Discipline_Act_2561.pdf",
-) -> int:
-    sections = extract_sections(Path(pdf_path))
-    vectors = embed_sections(sections)
-    count = upsert_sections(sections, vectors)
-    get_run_logger().info("upserted %d regulation rows", count)
-    return count
+def ingest_regulations(regulations_dir: str = "../data/regulations") -> int:
+    logger = get_run_logger()
+    total = 0
+    for pdf in sorted(Path(regulations_dir).glob("*.pdf")):
+        act_code = ACT_PDFS.get(pdf.name)
+        if act_code is None:
+            logger.warning("skipping %s — not registered in ACT_PDFS", pdf.name)
+            continue
+        sections = extract_sections(pdf, act_code)
+        vectors = embed_sections(sections)
+        count = upsert_sections(sections, vectors)
+        logger.info("%s: upserted %d regulation rows", act_code, count)
+        total += count
+    logger.info("total upserted: %d rows", total)
+    return total
 
 
 if __name__ == "__main__":

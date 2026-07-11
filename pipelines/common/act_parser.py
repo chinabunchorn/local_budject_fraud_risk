@@ -21,8 +21,12 @@ from pathlib import Path
 
 from pythainlp.util import normalize as thai_normalize
 
-ACT_CODE = "fiscal-discipline-act-2561"
-ACT_NAME_TH = "พระราชบัญญัติวินัยการเงินการคลังของรัฐ พ.ศ. ๒๕๖๑"
+# Known acts: code → official Thai name. The code is the regulation_code
+# prefix that RegulationReference citations resolve against.
+ACTS: dict[str, str] = {
+    "fiscal-discipline-act-2561": "พระราชบัญญัติวินัยการเงินการคลังของรัฐ พ.ศ. ๒๕๖๑",
+    "procurement-act-2560": "พระราชบัญญัติการจัดซื้อจัดจ้างและการบริหารพัสดุภาครัฐ พ.ศ. ๒๕๖๐",
+}
 
 # Thai combining marks: upper/lower vowels, tone marks, thanthakhat, nikhahit
 _THAI_COMBINING = "ัิ-ฺ็-๎"
@@ -44,15 +48,20 @@ _THAI_DIGITS = str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789")
 class ActSection:
     """One row for the `regulations` table (pre-embedding)."""
 
+    act_code: str  # key into ACTS, e.g. "fiscal-discipline-act-2561"
     section_no: str  # Arabic digits, e.g. "37" — or "preamble" / "note"
     section_title_th: str | None  # running หมวด/ส่วนที่ context, not a per-section title
     text: str
 
     @property
+    def act_name_th(self) -> str:
+        return ACTS[self.act_code]
+
+    @property
     def regulation_code(self) -> str:
         if self.section_no in ("preamble", "note"):
-            return f"{ACT_CODE}/{self.section_no}"
-        return f"{ACT_CODE}/s.{self.section_no}"
+            return f"{self.act_code}/{self.section_no}"
+        return f"{self.act_code}/s.{self.section_no}"
 
 
 def clean_page_text(page_text: str) -> str:
@@ -77,18 +86,25 @@ def extract_act_text(pdf_path: Path) -> str:
 
 
 def _is_heading_title(line: str) -> bool:
-    """The name line printed under a bare "หมวด ๓" / "ส่วนที่ ๑" heading."""
+    """The name line printed under a bare "หมวด ๓" / "ส่วนที่ ๑" heading.
+
+    In ราชกิจจานุเบกษา layout that next line is ALWAYS the heading's name, so
+    the checks are structural; the length cap (some names run >60 chars, e.g.
+    Procurement Act หมวด ๒ at 62) is only a sanity bound.
+    """
     line = line.strip()
     return (
         bool(line)
-        and len(line) <= 60
+        and len(line) <= 100
         and not _SECTION_START.match(line)
         and not _CHAPTER_START.match(line)
         and not _PART_START.match(line)
     )
 
 
-def split_sections(act_text: str) -> list[ActSection]:
+def split_sections(act_text: str, act_code: str) -> list[ActSection]:
+    if act_code not in ACTS:
+        raise ValueError(f"unknown act_code {act_code!r}; add it to ACTS first")
     sections: list[ActSection] = []
     chapter: str | None = None
     part: str | None = None
@@ -100,7 +116,7 @@ def split_sections(act_text: str) -> list[ActSection]:
     def emit() -> None:
         text = "\n".join(current_lines).strip()
         if text:
-            sections.append(ActSection(current_no, current_title, text))
+            sections.append(ActSection(act_code, current_no, current_title, text))
         current_lines.clear()
 
     def heading() -> str | None:
@@ -158,5 +174,5 @@ def split_sections(act_text: str) -> list[ActSection]:
     return sections
 
 
-def parse_act(pdf_path: Path) -> list[ActSection]:
-    return split_sections(extract_act_text(pdf_path))
+def parse_act(pdf_path: Path, act_code: str) -> list[ActSection]:
+    return split_sections(extract_act_text(pdf_path), act_code)
