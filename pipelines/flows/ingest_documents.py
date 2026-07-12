@@ -166,7 +166,11 @@ def _process_document(
     pdf_bytes = client.get_object(corpus_bucket(), plan.minio_key).read()
     sha = hashlib.sha256(pdf_bytes).hexdigest()
     filename = plan.minio_key.rsplit("/", 1)[-1]
-    stem = filename.rsplit(".", 1)[0]
+    # Basenames collide across projects (every project has a contract_summary.pdf),
+    # and LANTA's documents/ staging dir is flat — the outbox name (and therefore
+    # the ocr_results/<stem>/ result dir) must be unique per document content.
+    outbox_name = f"{sha[:12]}_{filename}"
+    outbox_stem = outbox_name.rsplit(".", 1)[0]
 
     with engine.begin() as conn:
         existing = conn.execute(
@@ -183,10 +187,12 @@ def _process_document(
                 # cheap resume: already extracted, outbox already holds the PDF,
                 # and no OCR results are available yet — don't re-run Docling
                 # (a 100-page scanned reference book costs ~10 min per pass)
-                has_ocr = bool(ocr_results_dir and _load_ocr_pages(ocr_results_dir, stem))
+                has_ocr = bool(
+                    ocr_results_dir and _load_ocr_pages(ocr_results_dir, outbox_stem)
+                )
                 manifest_path = outbox_dir / "outbox.json"
                 queued = (
-                    json.loads(manifest_path.read_text()).get(filename, {}).get("sha256")
+                    json.loads(manifest_path.read_text()).get(outbox_name, {}).get("sha256")
                     if manifest_path.exists()
                     else None
                 )
@@ -231,15 +237,15 @@ def _process_document(
     scanned = sum(1 for r in reports if NO_TEXT_LAYER in r.reasons) >= max(1, len(pages) // 2)
     source = "SCANNED" if scanned else "BORN_DIGITAL"
 
-    ocr_pages = _load_ocr_pages(ocr_results_dir, stem) if ocr_results_dir else {}
+    ocr_pages = _load_ocr_pages(ocr_results_dir, outbox_stem) if ocr_results_dir else {}
     unresolved = garbled - set(ocr_pages)
 
     if unresolved:
         outbox_dir.mkdir(parents=True, exist_ok=True)
-        (outbox_dir / filename).write_bytes(pdf_bytes)
+        (outbox_dir / outbox_name).write_bytes(pdf_bytes)
         manifest_path = outbox_dir / "outbox.json"
         entries = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
-        entries[filename] = {
+        entries[outbox_name] = {
             "minio_key": plan.minio_key,
             "sha256": sha,
             "pages_needing_ocr": sorted(unresolved),
