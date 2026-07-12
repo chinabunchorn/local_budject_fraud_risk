@@ -54,7 +54,9 @@ Read all three before scaffolding or making architectural decisions.
   migrations
 - **Batch:** Prefect 3 flows on the app VM; they drive `sbatch` / `squeue` / SFTP over SSH to the
   LANTA login node
-- **Parsing:** Docling (born-digital) + Typhoon-OCR 1.5 via vLLM (scanned/garbled) + PyThaiNLP
+- **Parsing:** Docling (born-digital) + Typhoon-OCR 1.5 (scanned/garbled; the LANTA batch job
+  runs it via plain transformers in the `hf` mamba env — the verified path; vLLM-offline
+  migration only after re-passing the OCR acceptance test) + PyThaiNLP
 - **Models:** `scb10x/typhoon2.5-qwen3-30b-a3b` (primary, all roles initially — staged, verified
   serving with TP2 + `--max-model-len 8192`); `Qwen/Qwen3-32B` AWQ-INT4 (batch analyst — NOT
   staged; download ONLY if Phase-2 quality evals justify it); `scb10x/typhoon-ocr1.5-2b` (OCR —
