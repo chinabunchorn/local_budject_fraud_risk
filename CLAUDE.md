@@ -137,23 +137,24 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
   test) is a manual runbook, and Prefect flows must treat LANTA I/O as manually-triggered steps.
 - Qwen3-32B AWQ deliberately NOT staged (roadmap "one model until forced otherwise").
 
-**Phase 2 tasks (now unblocked):**
-1. Curate the corpus in MinIO from the real gathered documents (2–3 sub-districts, 10–20
-   projects — real scans/legacy-font cases come with it) + the regulation text — required input
-   for everything below. BEFORE ingest: sensitivity check (public-procurement status; pseudonymize
-   sub-district/vendor names in demo copy if non-public — real entities get risk flags, so
-   "flag, never accuse" applies doubly). Add synthetic anomaly projects ONLY if the real sample
-   doesn't exercise the risk factors (demo needs a LOW→HIGH verdict spread).
-2. Prefect ingestion flow: Docling extraction → garbled-text detection → Typhoon-OCR routing
-   (LANTA batch job: SFTP suspect pages to Lustre → sbatch → fetch markdown back; only these
-   pages ever leave the app VM) → PyThaiNLP chunking → BGE-M3 embeddings (TEI, local) →
-   pgvector upsert; regulations as own collection.
-3. Parsing quality gate on the nasty Thai PDFs BEFORE mass indexing.
-4. Risk-scoring batch: versioned Thai prompt templates per risk factor in `pipelines/prompts/`,
-   `guided_json` bound to `schemas.RiskAssessment` (incl. per-factor `reasoning_steps` — the
-   validated chain the frontend displays), temperature 0, staged over SFTP. Raw `<think>` traces
-   go to Langfuse only — never into `risk_results`, never to the UI.
-5. Guardrails validation stage as the ONLY write path into `risk_results`.
-6. Langfuse tracing on every batch LLM call from day one.
-7. Decision point: eval Typhoon 2.5 scoring quality on a labeled sample; download and add
-   Qwen3-32B AWQ as batch analyst only if it measurably wins.
+**Phase 2 progress (July 2026):**
+1. DONE — real corpus (20 projects, 2 sub-districts, FY2565–2568, 60 PDFs) normalized,
+   uploaded to MinIO with generated manifest; regulation index ingested (447 sections:
+   Fiscal Discipline Act + Procurement Act + MoF Regulation — ข้อ ๒๐ is the
+   threshold-splitting citation). Migration 0003: document scopes, procurement fields, bids.
+2. DONE — ingestion flow ran on the real corpus: 32 docs COMPLETED (352 chunks embedded,
+   retrieval spot-checks precise); 28 docs / 649 pages in the OCR outbox with sha-prefixed
+   names (181 project+budget pages; 481 reference-book pages — the เอกสารกลาง are all scans).
+3. DONE — quality gate caught & fixed: legacy-font Thai→Latin layers (LOW_THAI_RATIO rule),
+   Docling RapidOCR disabled (Chinese/English model), image-placeholder stripping.
+4. DONE — prompts v1 (`pipelines/prompts/risk_scoring/v1/`, per-factor, reasoning steps,
+   banned words never in templates) + guardrails stage (`common/guardrails_stage.py`) as the
+   ONLY write path into `risk_results` (schema → regulation refs → lexicon → citations).
+**Remaining:**
+5. ATTENDED: LANTA OCR session (`python -m hpc_io.ocr_batch stage/submit/status/fetch`) →
+   ingestion pass 2 (`ocr_results_dir=...`) completes the 28 outbox docs.
+6. Structured extraction into projects/bids/budget_lines (บก.01 reference price, contract
+   summary winner+price, บก.06 bidders, budget reports) + deterministic prechecks
+   (BOQ↔บก.01 sum, labor rates, Factor F, expected-docs-per-route).
+7. score_risk flow: vLLM client (guided_json → RiskAssessment, temp 0) + Langfuse tracing
+   on every call → guardrails stage. Then the Typhoon-vs-Qwen3-32B eval decision point.
