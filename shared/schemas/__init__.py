@@ -6,6 +6,12 @@ Never duplicate a schema definition elsewhere.
 
 from schemas.chunk import EMBEDDING_DIM, Chunk, Citation
 from schemas.feedback import Feedback, FeedbackSentiment
+from schemas.guardrails import (
+    BANNED_TERMS,
+    LexiconViolation,
+    find_banned_terms,
+    lexicon_violations,
+)
 from schemas.risk import (
     ReasoningStep,
     ReasoningStepType,
@@ -18,11 +24,15 @@ from schemas.risk import (
 )
 
 __all__ = [
+    "BANNED_TERMS",
     "EMBEDDING_DIM",
     "Chunk",
     "Citation",
     "Feedback",
     "FeedbackSentiment",
+    "LexiconViolation",
+    "find_banned_terms",
+    "lexicon_violations",
     "ReasoningStep",
     "ReasoningStepType",
     "RegulationReference",
