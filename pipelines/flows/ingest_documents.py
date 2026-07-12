@@ -176,8 +176,23 @@ def _process_document(
             ),
             {"key": plan.minio_key},
         ).one_or_none()
-        if existing and existing.content_sha256 == sha and existing.parse_status == "COMPLETED":
-            return "skipped"
+        if existing and existing.content_sha256 == sha:
+            if existing.parse_status == "COMPLETED":
+                return "skipped"
+            if existing.parse_status == "NEEDS_OCR":
+                # cheap resume: already extracted, outbox already holds the PDF,
+                # and no OCR results are available yet — don't re-run Docling
+                # (a 100-page scanned reference book costs ~10 min per pass)
+                has_ocr = bool(ocr_results_dir and _load_ocr_pages(ocr_results_dir, stem))
+                manifest_path = outbox_dir / "outbox.json"
+                queued = (
+                    json.loads(manifest_path.read_text()).get(filename, {}).get("sha256")
+                    if manifest_path.exists()
+                    else None
+                )
+                if not has_ocr and queued == sha:
+                    logger.info("%s: still awaiting OCR (outbox already staged)", plan.minio_key)
+                    return "needs_ocr"
         document_id = conn.execute(
             text(
                 """
@@ -300,6 +315,9 @@ def ingest_documents(
 ) -> dict[str, int]:
     logger = get_run_logger()
     plans = load_catalog()
+    # project documents are the product — the giant scanned reference books
+    # (เอกสารกลาง, ~100 pages each through Docling) must never starve them
+    plans.sort(key=lambda p: {"PROJECT": 0, "SUB_DISTRICT": 1, "REFERENCE": 2}[p.scope])
     tally: dict[str, int] = {"completed": 0, "needs_ocr": 0, "skipped": 0}
     for plan in plans:
         outcome = process_document(

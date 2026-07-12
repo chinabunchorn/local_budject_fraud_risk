@@ -1,0 +1,1510 @@
+{
+  "ตารางค่าขนส่งวัสดุก่อสร้าง.pdf": {
+    "minio_key": "reference/กรมบัญชีกลาง/ตารางค่าขนส่งวัสดุก่อสร้าง.pdf",
+    "sha256": "181c866f5350af2644a338b75634f7899938f742e772d9d7d8efc87e7995c497",
+    "pages_needing_ocr": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "reasons": {
+      "1": [
+        "NO_TEXT_LAYER"
+      ],
+      "2": [
+        "NO_TEXT_LAYER"
+      ],
+      "3": [
+        "NO_TEXT_LAYER"
+      ],
+      "4": [
+        "NO_TEXT_LAYER"
+      ],
+      "5": [
+        "NO_TEXT_LAYER"
+      ],
+      "6": [
+        "NO_TEXT_LAYER"
+      ],
+      "7": [
+        "NO_TEXT_LAYER"
+      ]
+    }
+  },
+  "บัญชีค่าแรงงานสำหรับถอดแบบคำนวณราคากลางงานก่อสร้าง.pdf": {
+    "minio_key": "reference/กรมบัญชีกลาง/บัญชีค่าแรงงานสำหรับถอดแบบคำนวณราคากลางงานก่อสร้าง.pdf",
+    "sha256": "65e87e15576cbe5cef9593e68b0702b6bad279180845ca5beef27738d76b2e16",
+    "pages_needing_ocr": [
+      1,
+      35
+    ],
+    "reasons": {
+      "1": [
+        "NO_TEXT_LAYER"
+      ],
+      "35": [
+        "LOW_THAI_RATIO"
+      ]
+    }
+  },
+  "อัตราดอกเบี้ยเงินกู้สำหรับใช้เป็นเกณฑ์ในการคำนวณราคากลางงานก่อสร้างฯ.pdf": {
+    "minio_key": "reference/กรมบัญชีกลาง/อัตราดอกเบี้ยเงินกู้สำหรับใช้เป็นเกณฑ์ในการคำนวณราคากลางงานก่อสร้างฯ.pdf",
+    "sha256": "4baf34784b9ebc35c7ec9bfd512d0e2c31e36037b39f0b02ddf35244051f6743",
+    "pages_needing_ocr": [
+      1,
+      2,
+      15,
+      41
+    ],
+    "reasons": {
+      "1": [
+        "NO_TEXT_LAYER"
+      ],
+      "2": [
+        "NO_TEXT_LAYER"
+      ],
+      "15": [
+        "NO_TEXT_LAYER"
+      ],
+      "41": [
+        "NO_TEXT_LAYER"
+      ]
+    }
+  },
+  "ราคามาตรฐานการออกแบบอาคาร.pdf": {
+    "minio_key": "reference/สำนักงบประมาณ/ราคามาตรฐานการออกแบบอาคาร/ราคามาตรฐานการออกแบบอาคาร.pdf",
+    "sha256": "7e810cab01657474428ce1deeb07b3edbda83e2a62ff342214b39306b46047d0",
+    "pages_needing_ocr": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13
+    ],
+    "reasons": {
+      "1": [
+        "NO_TEXT_LAYER"
+      ],
+      "2": [
+        "NO_TEXT_LAYER"
+      ],
+      "3": [
+        "NO_TEXT_LAYER"
+      ],
+      "4": [
+        "NO_TEXT_LAYER"
+      ],
+      "5": [
+        "NO_TEXT_LAYER"
+      ],
+      "6": [
+        "NO_TEXT_LAYER"
+      ],
+      "7": [
+        "NO_TEXT_LAYER"
+      ],
+      "8": [
+        "NO_TEXT_LAYER"
+      ],
+      "9": [
+        "NO_TEXT_LAYER"
+      ],
+      "10": [
+        "NO_TEXT_LAYER"
+      ],
+      "11": [
+        "NO_TEXT_LAYER"
+      ],
+      "12": [
+        "NO_TEXT_LAYER"
+      ],
+      "13": [
+        "NO_TEXT_LAYER"
+      ]
+    }
+  },
+  "ราคามาตรฐานครุภัณฑ์ 67.pdf": {
+    "minio_key": "reference/สำนักงบประมาณ/ราคามาตรฐานครุภัณฑ์/ราคามาตรฐานครุภัณฑ์ 67.pdf",
+    "sha256": "37e0cb4f0b7de1768efee6dfbc9add181833a733a4dac0a1e970ba07c53fcf92",
+    "pages_needing_ocr": [
+      1,
+      2,
+      4,
+      7,
+      8,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95,
+      96,
+      97,
+      98,
+      99,
+      100,
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109,
+      110,
+      111,
+      112,
+      113,
+      114,
+      116,
+      117
+    ],
+    "reasons": {
+      "1": [
+        "NO_TEXT_LAYER"
+      ],
+      "2": [
+        "NO_TEXT_LAYER"
+      ],
+      "4": [
+        "NO_TEXT_LAYER"
+      ],
+      "7": [
+        "NO_TEXT_LAYER"
+      ],
+      "8": [
+        "NO_TEXT_LAYER"
+      ],
+      "39": [
+        "NO_TEXT_LAYER"
+      ],
+      "40": [
+        "NO_TEXT_LAYER"
+      ],
+      "41": [
+        "NO_TEXT_LAYER"
+      ],
+      "42": [
+        "NO_TEXT_LAYER"
+      ],
+      "43": [
+        "NO_TEXT_LAYER"
+      ],
+      "44": [
+        "NO_TEXT_LAYER"
+      ],
+      "45": [
+        "NO_TEXT_LAYER"
+      ],
+      "46": [
+        "NO_TEXT_LAYER"
+      ],
+      "47": [
+        "NO_TEXT_LAYER"
+      ],
+      "48": [
+        "NO_TEXT_LAYER"
+      ],
+      "49": [
+        "NO_TEXT_LAYER"
+      ],
+      "50": [
+        "NO_TEXT_LAYER"
+      ],
+      "51": [
+        "NO_TEXT_LAYER"
+      ],
+      "52": [
+        "NO_TEXT_LAYER"
+      ],
+      "53": [
+        "NO_TEXT_LAYER"
+      ],
+      "54": [
+        "NO_TEXT_LAYER"
+      ],
+      "55": [
+        "NO_TEXT_LAYER"
+      ],
+      "56": [
+        "NO_TEXT_LAYER"
+      ],
+      "57": [
+        "NO_TEXT_LAYER"
+      ],
+      "58": [
+        "NO_TEXT_LAYER"
+      ],
+      "59": [
+        "NO_TEXT_LAYER"
+      ],
+      "60": [
+        "NO_TEXT_LAYER"
+      ],
+      "61": [
+        "NO_TEXT_LAYER"
+      ],
+      "62": [
+        "NO_TEXT_LAYER"
+      ],
+      "63": [
+        "NO_TEXT_LAYER"
+      ],
+      "64": [
+        "NO_TEXT_LAYER"
+      ],
+      "65": [
+        "NO_TEXT_LAYER"
+      ],
+      "66": [
+        "NO_TEXT_LAYER"
+      ],
+      "67": [
+        "NO_TEXT_LAYER"
+      ],
+      "68": [
+        "NO_TEXT_LAYER"
+      ],
+      "69": [
+        "NO_TEXT_LAYER"
+      ],
+      "70": [
+        "NO_TEXT_LAYER"
+      ],
+      "71": [
+        "NO_TEXT_LAYER"
+      ],
+      "72": [
+        "NO_TEXT_LAYER"
+      ],
+      "73": [
+        "NO_TEXT_LAYER"
+      ],
+      "74": [
+        "NO_TEXT_LAYER"
+      ],
+      "75": [
+        "NO_TEXT_LAYER"
+      ],
+      "76": [
+        "NO_TEXT_LAYER"
+      ],
+      "77": [
+        "NO_TEXT_LAYER"
+      ],
+      "78": [
+        "NO_TEXT_LAYER"
+      ],
+      "79": [
+        "NO_TEXT_LAYER"
+      ],
+      "80": [
+        "NO_TEXT_LAYER"
+      ],
+      "81": [
+        "NO_TEXT_LAYER"
+      ],
+      "82": [
+        "NO_TEXT_LAYER"
+      ],
+      "83": [
+        "NO_TEXT_LAYER"
+      ],
+      "84": [
+        "NO_TEXT_LAYER"
+      ],
+      "85": [
+        "NO_TEXT_LAYER"
+      ],
+      "86": [
+        "NO_TEXT_LAYER"
+      ],
+      "87": [
+        "NO_TEXT_LAYER"
+      ],
+      "88": [
+        "NO_TEXT_LAYER"
+      ],
+      "89": [
+        "NO_TEXT_LAYER"
+      ],
+      "90": [
+        "NO_TEXT_LAYER"
+      ],
+      "91": [
+        "NO_TEXT_LAYER"
+      ],
+      "92": [
+        "NO_TEXT_LAYER"
+      ],
+      "93": [
+        "NO_TEXT_LAYER"
+      ],
+      "94": [
+        "NO_TEXT_LAYER"
+      ],
+      "95": [
+        "NO_TEXT_LAYER"
+      ],
+      "96": [
+        "NO_TEXT_LAYER"
+      ],
+      "97": [
+        "NO_TEXT_LAYER"
+      ],
+      "98": [
+        "NO_TEXT_LAYER"
+      ],
+      "99": [
+        "NO_TEXT_LAYER"
+      ],
+      "100": [
+        "NO_TEXT_LAYER"
+      ],
+      "101": [
+        "NO_TEXT_LAYER"
+      ],
+      "102": [
+        "NO_TEXT_LAYER"
+      ],
+      "103": [
+        "NO_TEXT_LAYER"
+      ],
+      "104": [
+        "NO_TEXT_LAYER"
+      ],
+      "105": [
+        "NO_TEXT_LAYER"
+      ],
+      "106": [
+        "NO_TEXT_LAYER"
+      ],
+      "107": [
+        "NO_TEXT_LAYER"
+      ],
+      "108": [
+        "NO_TEXT_LAYER"
+      ],
+      "109": [
+        "NO_TEXT_LAYER"
+      ],
+      "110": [
+        "NO_TEXT_LAYER"
+      ],
+      "111": [
+        "NO_TEXT_LAYER"
+      ],
+      "112": [
+        "NO_TEXT_LAYER"
+      ],
+      "113": [
+        "NO_TEXT_LAYER"
+      ],
+      "114": [
+        "NO_TEXT_LAYER"
+      ],
+      "116": [
+        "NO_TEXT_LAYER"
+      ],
+      "117": [
+        "NO_TEXT_LAYER"
+      ]
+    }
+  },
+  "ราคามาตรฐานครุภัณฑ์ 68.pdf": {
+    "minio_key": "reference/สำนักงบประมาณ/ราคามาตรฐานครุภัณฑ์/ราคามาตรฐานครุภัณฑ์ 68.pdf",
+    "sha256": "f84073cc79eefcb739b65b9f836b3824432733ddc8751b9e50819f7c1280c6b3",
+    "pages_needing_ocr": [
+      1,
+      2,
+      4,
+      7,
+      8,
+      40,
+      108,
+      109,
+      110,
+      111,
+      112,
+      113,
+      114,
+      116,
+      117
+    ],
+    "reasons": {
+      "1": [
+        "NO_TEXT_LAYER"
+      ],
+      "2": [
+        "NO_TEXT_LAYER"
+      ],
+      "4": [
+        "NO_TEXT_LAYER"
+      ],
+      "7": [
+        "NO_TEXT_LAYER"
+      ],
+      "8": [
+        "NO_TEXT_LAYER"
+      ],
+      "40": [
+        "NO_TEXT_LAYER"
+      ],
+      "108": [
+        "NO_TEXT_LAYER"
+      ],
+      "109": [
+        "NO_TEXT_LAYER"
+      ],
+      "110": [
+        "NO_TEXT_LAYER"
+      ],
+      "111": [
+        "NO_TEXT_LAYER"
+      ],
+      "112": [
+        "NO_TEXT_LAYER"
+      ],
+      "113": [
+        "NO_TEXT_LAYER"
+      ],
+      "114": [
+        "NO_TEXT_LAYER"
+      ],
+      "116": [
+        "NO_TEXT_LAYER"
+      ],
+      "117": [
+        "NO_TEXT_LAYER"
+      ]
+    }
+  },
+  "ราคามาตรฐานก่อสร้าง 65.pdf": {
+    "minio_key": "reference/สำนักงบประมาณ/ราคามาตรฐานสิ่งก่อสร้าง/ราคามาตรฐานก่อสร้าง 65.pdf",
+    "sha256": "3f0634226bc0829ca274af3c2dee450eb9a25d113c9f57830b6932903437042e",
+    "pages_needing_ocr": [
+      2,
+      4,
+      10,
+      29,
+      30,
+      54,
+      55,
+      56,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      72,
+      74,
+      75,
+      76,
+      77,
+      78,
+      119,
+      120,
+      121,
+      122,
+      123,
+      124,
+      125,
+      126,
+      127,
+      128,
+      129,
+      130,
+      132,
+      133,
+      134,
+      135,
+      136,
+      137,
+      138,
+      139,
+      140,
+      141,
+      142,
+      143,
+      144,
+      145,
+      146,
+      147,
+      148,
+      149,
+      150,
+      151,
+      152,
+      154,
+      155,
+      156,
+      157,
+      158,
+      159,
+      160,
+      161,
+      162,
+      163,
+      164,
+      165,
+      166,
+      167,
+      168,
+      169,
+      170,
+      171,
+      172,
+      173,
+      174,
+      175,
+      176,
+      177,
+      178,
+      179,
+      180,
+      181,
+      182,
+      183,
+      184,
+      185,
+      186,
+      187,
+      188,
+      189,
+      190,
+      191,
+      192,
+      193,
+      194,
+      195,
+      196,
+      197,
+      198,
+      199,
+      200,
+      201,
+      202,
+      203,
+      204,
+      205,
+      206,
+      207,
+      208,
+      209,
+      210,
+      211,
+      212,
+      213,
+      214,
+      215
+    ],
+    "reasons": {
+      "2": [
+        "NO_TEXT_LAYER"
+      ],
+      "4": [
+        "NO_TEXT_LAYER"
+      ],
+      "10": [
+        "NO_TEXT_LAYER"
+      ],
+      "29": [
+        "NO_TEXT_LAYER"
+      ],
+      "30": [
+        "NO_TEXT_LAYER"
+      ],
+      "54": [
+        "NO_TEXT_LAYER"
+      ],
+      "55": [
+        "NO_TEXT_LAYER"
+      ],
+      "56": [
+        "NO_TEXT_LAYER"
+      ],
+      "58": [
+        "NO_TEXT_LAYER"
+      ],
+      "59": [
+        "NO_TEXT_LAYER"
+      ],
+      "60": [
+        "NO_TEXT_LAYER"
+      ],
+      "61": [
+        "NO_TEXT_LAYER"
+      ],
+      "62": [
+        "NO_TEXT_LAYER"
+      ],
+      "63": [
+        "NO_TEXT_LAYER"
+      ],
+      "64": [
+        "NO_TEXT_LAYER"
+      ],
+      "65": [
+        "NO_TEXT_LAYER"
+      ],
+      "66": [
+        "NO_TEXT_LAYER"
+      ],
+      "67": [
+        "NO_TEXT_LAYER"
+      ],
+      "68": [
+        "NO_TEXT_LAYER"
+      ],
+      "69": [
+        "NO_TEXT_LAYER"
+      ],
+      "70": [
+        "NO_TEXT_LAYER"
+      ],
+      "72": [
+        "NO_TEXT_LAYER"
+      ],
+      "74": [
+        "NO_TEXT_LAYER"
+      ],
+      "75": [
+        "NO_TEXT_LAYER"
+      ],
+      "76": [
+        "NO_TEXT_LAYER"
+      ],
+      "77": [
+        "NO_TEXT_LAYER"
+      ],
+      "78": [
+        "NO_TEXT_LAYER"
+      ],
+      "119": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "120": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "121": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "122": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "123": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "124": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "125": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "126": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "127": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "128": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "129": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "130": [
+        "NO_TEXT_LAYER"
+      ],
+      "132": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "133": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "134": [
+        "NO_TEXT_LAYER"
+      ],
+      "135": [
+        "NO_TEXT_LAYER"
+      ],
+      "136": [
+        "NO_TEXT_LAYER"
+      ],
+      "137": [
+        "NO_TEXT_LAYER"
+      ],
+      "138": [
+        "NO_TEXT_LAYER"
+      ],
+      "139": [
+        "NO_TEXT_LAYER"
+      ],
+      "140": [
+        "NO_TEXT_LAYER"
+      ],
+      "141": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "142": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "143": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "144": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "145": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "146": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "147": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "148": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "149": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "150": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "151": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "152": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "154": [
+        "NO_TEXT_LAYER"
+      ],
+      "155": [
+        "NO_TEXT_LAYER"
+      ],
+      "156": [
+        "NO_TEXT_LAYER"
+      ],
+      "157": [
+        "NO_TEXT_LAYER"
+      ],
+      "158": [
+        "NO_TEXT_LAYER"
+      ],
+      "159": [
+        "NO_TEXT_LAYER"
+      ],
+      "160": [
+        "NO_TEXT_LAYER"
+      ],
+      "161": [
+        "NO_TEXT_LAYER"
+      ],
+      "162": [
+        "NO_TEXT_LAYER"
+      ],
+      "163": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "164": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "165": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "166": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "167": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "168": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "169": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "170": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "171": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "172": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "173": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "174": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "175": [
+        "NO_TEXT_LAYER"
+      ],
+      "176": [
+        "NO_TEXT_LAYER"
+      ],
+      "177": [
+        "NO_TEXT_LAYER"
+      ],
+      "178": [
+        "NO_TEXT_LAYER"
+      ],
+      "179": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "180": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "181": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "182": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "183": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "184": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "185": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "186": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "187": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "188": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "189": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "190": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "191": [
+        "NO_TEXT_LAYER"
+      ],
+      "192": [
+        "NO_TEXT_LAYER"
+      ],
+      "193": [
+        "NO_TEXT_LAYER"
+      ],
+      "194": [
+        "NO_TEXT_LAYER"
+      ],
+      "195": [
+        "NO_TEXT_LAYER"
+      ],
+      "196": [
+        "NO_TEXT_LAYER"
+      ],
+      "197": [
+        "NO_TEXT_LAYER"
+      ],
+      "198": [
+        "NO_TEXT_LAYER"
+      ],
+      "199": [
+        "NO_TEXT_LAYER"
+      ],
+      "200": [
+        "NO_TEXT_LAYER"
+      ],
+      "201": [
+        "NO_TEXT_LAYER"
+      ],
+      "202": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "203": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "204": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "205": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "206": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "207": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "208": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "209": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "210": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "211": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "212": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "213": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "214": [
+        "NO_TEXT_LAYER"
+      ],
+      "215": [
+        "NO_TEXT_LAYER"
+      ]
+    }
+  },
+  "ราคามาตรฐานสิ่งก่อสร้าง 66.pdf": {
+    "minio_key": "reference/สำนักงบประมาณ/ราคามาตรฐานสิ่งก่อสร้าง/ราคามาตรฐานสิ่งก่อสร้าง 66.pdf",
+    "sha256": "3c27ed42f600e83724b24cd424231068253f472871b2bd60daae34e2fdee62cd",
+    "pages_needing_ocr": [
+      2,
+      4,
+      10,
+      29,
+      30,
+      54,
+      55,
+      56,
+      58,
+      59,
+      60,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      76,
+      78,
+      79,
+      80,
+      81,
+      82,
+      123,
+      124,
+      125,
+      126,
+      127,
+      128,
+      129,
+      130,
+      131,
+      132,
+      133,
+      134,
+      136,
+      137,
+      138,
+      139,
+      142,
+      143,
+      144,
+      145,
+      146,
+      147,
+      148,
+      149,
+      150,
+      151,
+      152,
+      153,
+      154,
+      155,
+      156,
+      157,
+      158,
+      159,
+      160,
+      161,
+      162,
+      163,
+      164,
+      165,
+      166,
+      168,
+      169,
+      170,
+      171,
+      172,
+      173,
+      174,
+      175,
+      176,
+      177,
+      178,
+      179,
+      180,
+      181,
+      194,
+      195
+    ],
+    "reasons": {
+      "2": [
+        "NO_TEXT_LAYER"
+      ],
+      "4": [
+        "NO_TEXT_LAYER"
+      ],
+      "10": [
+        "NO_TEXT_LAYER"
+      ],
+      "29": [
+        "NO_TEXT_LAYER"
+      ],
+      "30": [
+        "NO_TEXT_LAYER"
+      ],
+      "54": [
+        "NO_TEXT_LAYER"
+      ],
+      "55": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "56": [
+        "NO_TEXT_LAYER"
+      ],
+      "58": [
+        "NO_TEXT_LAYER"
+      ],
+      "59": [
+        "NO_TEXT_LAYER"
+      ],
+      "60": [
+        "NO_TEXT_LAYER"
+      ],
+      "62": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "63": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "64": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "65": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "66": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "67": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "68": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "69": [
+        "NO_TEXT_LAYER"
+      ],
+      "70": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "71": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "72": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "73": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "74": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "76": [
+        "NO_TEXT_LAYER"
+      ],
+      "78": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "79": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "80": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "81": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "82": [
+        "NO_TEXT_LAYER"
+      ],
+      "123": [
+        "NO_TEXT_LAYER"
+      ],
+      "124": [
+        "NO_TEXT_LAYER"
+      ],
+      "125": [
+        "NO_TEXT_LAYER"
+      ],
+      "126": [
+        "NO_TEXT_LAYER"
+      ],
+      "127": [
+        "NO_TEXT_LAYER"
+      ],
+      "128": [
+        "NO_TEXT_LAYER"
+      ],
+      "129": [
+        "NO_TEXT_LAYER"
+      ],
+      "130": [
+        "NO_TEXT_LAYER"
+      ],
+      "131": [
+        "NO_TEXT_LAYER"
+      ],
+      "132": [
+        "NO_TEXT_LAYER"
+      ],
+      "133": [
+        "NO_TEXT_LAYER"
+      ],
+      "134": [
+        "NO_TEXT_LAYER"
+      ],
+      "136": [
+        "NO_TEXT_LAYER"
+      ],
+      "137": [
+        "NO_TEXT_LAYER"
+      ],
+      "138": [
+        "NO_TEXT_LAYER"
+      ],
+      "139": [
+        "NO_TEXT_LAYER"
+      ],
+      "142": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "143": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "144": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "145": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "146": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "147": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "148": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "149": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "150": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "151": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "152": [
+        "NO_TEXT_LAYER"
+      ],
+      "153": [
+        "NO_TEXT_LAYER"
+      ],
+      "154": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "155": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "156": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "157": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "158": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "159": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "160": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "161": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "162": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "163": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "164": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "165": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "166": [
+        "NO_TEXT_LAYER"
+      ],
+      "168": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "169": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "170": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "171": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "172": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "173": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "174": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "175": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "176": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "177": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "178": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "179": [
+        "REPLACEMENT_CHARS",
+        "LOW_THAI_RATIO"
+      ],
+      "180": [
+        "NO_TEXT_LAYER"
+      ],
+      "181": [
+        "NO_TEXT_LAYER"
+      ],
+      "194": [
+        "NO_TEXT_LAYER"
+      ],
+      "195": [
+        "NO_TEXT_LAYER"
+      ]
+    }
+  }
+}
