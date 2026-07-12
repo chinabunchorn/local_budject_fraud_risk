@@ -32,7 +32,7 @@ from sqlalchemy import create_engine, text
 
 from common.chunker import chunk_pages
 from common.garbled import NO_TEXT_LAYER, decide_page
-from common.manifest import ManifestSubDistrict, parse_manifest
+from common.manifest import Manifest, ManifestDocument, parse_manifest
 from common.settings import (
     corpus_bucket,
     database_url,
@@ -62,7 +62,9 @@ def _minio_client() -> Minio:
 class DocumentPlan:
     minio_key: str
     doc_type: str | None
-    project_id: str
+    scope: str  # PROJECT | SUB_DISTRICT | REFERENCE (migration 0003)
+    project_id: str | None = None
+    sub_district_id: str | None = None
 
 
 @task
@@ -71,11 +73,14 @@ def load_catalog() -> list[DocumentPlan]:
     engine = create_engine(database_url())
     client = _minio_client()
     raw = client.get_object(corpus_bucket(), MANIFEST_KEY).read().decode("utf-8")
-    sub_districts: list[ManifestSubDistrict] = parse_manifest(raw)
+    manifest: Manifest = parse_manifest(raw)
 
-    plans: list[DocumentPlan] = []
+    def plan(doc: ManifestDocument, scope: str, **owner: str) -> DocumentPlan:
+        return DocumentPlan(doc.key, doc.doc_type, scope, **owner)
+
+    plans = [plan(doc, "REFERENCE") for doc in manifest.reference_documents]
     with engine.begin() as conn:
-        for sd in sub_districts:
+        for sd in manifest.sub_districts:
             sd_id = conn.execute(
                 text(
                     """
@@ -88,7 +93,13 @@ def load_catalog() -> list[DocumentPlan]:
                 ),
                 {"name": sd.name_th, "district": sd.district_th, "province": sd.province_th},
             ).scalar_one()
+            plans.extend(
+                plan(doc, "SUB_DISTRICT", sub_district_id=str(sd_id))
+                for doc in sd.budget_reports
+            )
             for proj in sd.projects:
+                # COALESCE: a manifest without budget/category must never
+                # null-out values later filled by structured extraction
                 project_id = conn.execute(
                     text(
                         """
@@ -97,8 +108,8 @@ def load_catalog() -> list[DocumentPlan]:
                         VALUES (:sd, :name, :fy, :cat, :budget)
                         ON CONFLICT ON CONSTRAINT uq_projects_natural_key
                         DO UPDATE SET
-                            category_th = EXCLUDED.category_th,
-                            budget_total = EXCLUDED.budget_total
+                            category_th = COALESCE(EXCLUDED.category_th, projects.category_th),
+                            budget_total = COALESCE(EXCLUDED.budget_total, projects.budget_total)
                         RETURNING id
                         """
                     ),
@@ -111,7 +122,7 @@ def load_catalog() -> list[DocumentPlan]:
                     },
                 ).scalar_one()
                 plans.extend(
-                    DocumentPlan(doc.key, doc.doc_type, str(project_id))
+                    plan(doc, "PROJECT", project_id=str(project_id))
                     for doc in proj.documents
                 )
     engine.dispose()
@@ -170,10 +181,14 @@ def _process_document(
         document_id = conn.execute(
             text(
                 """
-                INSERT INTO documents (project_id, minio_key, filename, doc_type, content_sha256)
-                VALUES (:project, :key, :filename, :doc_type, :sha)
+                INSERT INTO documents
+                    (project_id, sub_district_id, scope, minio_key, filename,
+                     doc_type, content_sha256)
+                VALUES (:project, :sub_district, :scope, :key, :filename, :doc_type, :sha)
                 ON CONFLICT (minio_key) DO UPDATE SET
                     project_id = EXCLUDED.project_id,
+                    sub_district_id = EXCLUDED.sub_district_id,
+                    scope = EXCLUDED.scope,
                     doc_type = EXCLUDED.doc_type,
                     content_sha256 = EXCLUDED.content_sha256,
                     parse_status = 'PENDING'
@@ -182,6 +197,8 @@ def _process_document(
             ),
             {
                 "project": plan.project_id,
+                "sub_district": plan.sub_district_id,
+                "scope": plan.scope,
                 "key": plan.minio_key,
                 "filename": filename,
                 "doc_type": plan.doc_type,
