@@ -1,221 +1,171 @@
 #!/usr/bin/env python
-"""Typhoon-OCR batch driver for LANTA — Tier-1 optimized (2026-07-13).
+"""Typhoon-OCR batch driver for LANTA — Tier-1 optimized merge (2026-07-13).
 
-Contract (unchanged, see hpc/OCR_BATCH_BRIEF history + LANTA_CONFIG_NOTES.md):
-    input : every *.pdf directly in  /project/tn999991-cstu/chin/documents/
-    output: /project/tn999991-cstu/chin/ocr_results/<pdf-stem>/page_<n>.md
-            (n = 1-based PDF page number, UTF-8 markdown)
+This file is the canonical version: the real-data-verified pieces of the
+originally deployed script (extraction prompt, 200dpi+LANCZOS rendering,
+chat-template invocation, max_new_tokens=2000) merged with the Tier-1
+mechanics (page-level resume, explicit bf16+SDPA, torch.inference_mode,
+atomic writes, per-page failure isolation, lazy per-page rendering).
 
-Runs in the `hf` mamba env (Python 3.11) on one A100 — plain transformers,
-NOT vLLM, NOT Apptainer (the real-data-verified path).
-
-Tier-1 changes vs. the original:
-  1. PAGE-level resume: a page whose page_<n>.md exists non-empty is skipped,
-     so a walltime-killed job resumes where it died. The whole-stem fast path
-     (skip complete documents BEFORE model load) is preserved.
-  2. bf16 + SDPA attention at model load.
-  3. All processing under torch.inference_mode().
-  4. Atomic page writes (tmp file + os.replace) — a kill mid-write can never
-     leave a corrupt/partial page_<n>.md that resume would wrongly skip.
+Contract (unchanged): every *.pdf directly in documents/ →
+ocr_results/<pdf-stem>/page_<n>.md (n = 1-based page number, UTF-8).
+Runs in the `hf` mamba env on one A100 — plain transformers, NOT vLLM.
 """
 
-from __future__ import annotations
-
-import io
-import json
-import re
+import os
 import sys
 import time
-from pathlib import Path
+
+os.environ["HF_HUB_OFFLINE"] = "1"  # compute nodes are air-gapped
+
+import glob
 
 import fitz  # PyMuPDF
 import torch
 from PIL import Image
 
-BASE = Path("/project/tn999991-cstu/chin")
-DOCUMENTS_DIR = BASE / "documents"
-RESULTS_DIR = BASE / "ocr_results"
-MODEL_PATH = BASE / "models" / "typhoon-ocr1.5-2b"
+model_path = "/project/tn999991-cstu/chin/models/typhoon-ocr1.5-2b"
+input_dir = "/project/tn999991-cstu/chin/documents"
+output_dir = "/project/tn999991-cstu/chin/ocr_results"
+os.makedirs(output_dir, exist_ok=True)
 
-TARGET_LONG_EDGE = 1800  # matches the model's training resolution
+# --- verified extraction prompt — DO NOT EDIT without re-running the
+# --- acceptance test (thashang67.pdf) and reviewing output quality
+prompt = """Extract all text from the image.
 
-# NOTE: deliberately NOT lowered per Tier-1 scope. If dense-table pages loop,
-# the next knob is max_new_tokens≈3000 + repetition_penalty≈1.1 (plan Tier 1.2).
-MAX_NEW_TOKENS = 16384
+Instructions:
+- Only return the clean Markdown.
+- Do not include any explanation or extra text.
+- You must include all information on the page.
 
-# ---------------------------------------------------------------------------
-# KEEP-YOURS: this must be the EXACT extraction prompt from the deployed,
-# real-data-verified batch_ocr.py — the model is task-specific and quality
-# depends on it. The string below is the documented Typhoon-OCR default task
-# prompt; diff against the working version before replacing anything.
-# ---------------------------------------------------------------------------
-PROMPT = (
-    "Below is an image of a document page. Simply return the markdown "
-    "representation of this document, presenting tables in markdown format "
-    "as they naturally appear.\n"
-    "If the document contains images, use a placeholder like dummy.png for "
-    "each image.\n"
-    "Your final output must be in JSON format with a single key `natural_text` "
-    "containing the response.\n"
-    "RETURN ONLY JSON. Do not explain."
-)
+Formatting Rules:
+- Tables: Render tables using <table>...</table> in clean HTML format.
+- Page Numbers: Wrap page numbers in <page_number>...</page_number>."""
 
-_JSON_FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
+MAX_NEW_TOKENS = 2000  # as deployed & verified; dense pages truncate here
 
 
-def render_page(page: fitz.Page) -> Image.Image:
-    """Render one PDF page to a PIL image, TARGET_LONG_EDGE px on the long side."""
-    rect = page.rect
-    zoom = TARGET_LONG_EDGE / max(rect.width, rect.height)
-    pixmap = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
-    return Image.open(io.BytesIO(pixmap.tobytes("png"))).convert("RGB")
-
-
-def page_path(stem: str, page_no: int) -> Path:
-    return RESULTS_DIR / stem / f"page_{page_no}.md"
-
-
-def page_done(stem: str, page_no: int) -> bool:
-    path = page_path(stem, page_no)
-    return path.exists() and path.stat().st_size > 0
-
-
-def pending_pages(pdf_path: Path) -> list[int]:
-    """1-based page numbers still needing OCR (page-level resume)."""
-    with fitz.open(pdf_path) as doc:
-        total = doc.page_count
-    return [n for n in range(1, total + 1) if not page_done(pdf_path.stem, n)]
-
-
-def atomic_write(path: Path, text: str) -> None:
-    """Never leave a partial page_<n>.md: write sibling tmp, then rename."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
-
-
-def parse_natural_text(raw: str) -> str:
-    """The model answers JSON {"natural_text": ...}; fall back to raw output."""
-    cleaned = _JSON_FENCE.sub("", raw.strip())
-    try:
-        parsed = json.loads(cleaned)
-        if isinstance(parsed, dict) and isinstance(parsed.get("natural_text"), str):
-            return parsed["natural_text"]
-    except json.JSONDecodeError:
-        pass
-    return raw.strip()
-
-
-def load_model():
-    """Tier 1: bf16 + SDPA. Loaded ONCE, and only when there is pending work."""
-    from transformers import AutoModelForImageTextToText, AutoProcessor
-
-    processor = AutoProcessor.from_pretrained(MODEL_PATH)
-    model = AutoModelForImageTextToText.from_pretrained(
-        MODEL_PATH,
-        torch_dtype=torch.bfloat16,
-        attn_implementation="sdpa",
-        device_map="cuda",
-    ).eval()
-    return model, processor
-
-
-def ocr_image(model, processor, image: Image.Image) -> str:
-    # -----------------------------------------------------------------------
-    # KEEP-YOURS: if the deployed script builds inputs / calls generate()
-    # differently, keep the deployed invocation — it is the verified one.
-    # Only the load-time kwargs (bf16/sdpa) and inference_mode are Tier 1.
-    # -----------------------------------------------------------------------
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {"type": "image", "image": image},
-                {"type": "text", "text": PROMPT},
-            ],
-        }
-    ]
-    inputs = processor.apply_chat_template(
-        messages,
-        add_generation_prompt=True,
-        tokenize=True,
-        return_dict=True,
-        return_tensors="pt",
-    ).to(model.device)
-    generated = model.generate(
-        **inputs, max_new_tokens=MAX_NEW_TOKENS, do_sample=False
-    )
-    answer = generated[:, inputs["input_ids"].shape[1] :]
-    return processor.batch_decode(answer, skip_special_tokens=True)[0]
-
-
-def process_document(model, processor, pdf_path: Path, pages: list[int]) -> bool:
-    """OCR the pending pages of one PDF. Returns True if every page succeeded."""
-    stem = pdf_path.stem
-    ok = True
-    with fitz.open(pdf_path) as doc:
-        total = doc.page_count
-        for page_no in pages:
-            started = time.monotonic()
-            try:
-                image = render_page(doc[page_no - 1])
-                text = parse_natural_text(ocr_image(model, processor, image))
-                atomic_write(page_path(stem, page_no), text)
-                print(
-                    f"[{stem}] page {page_no}/{total} ok "
-                    f"chars={len(text)} {time.monotonic() - started:.1f}s",
-                    flush=True,
-                )
-            except Exception as exc:  # noqa: BLE001 — isolate failures per page
-                ok = False
-                print(
-                    f"[{stem}] page {page_no}/{total} FAILED "
-                    f"{type(exc).__name__}: {exc}",
-                    flush=True,
-                )
-    return ok
-
-
-def main() -> int:
-    pdfs = sorted(p for p in DOCUMENTS_DIR.glob("*.pdf") if p.is_file())
-    if not pdfs:
-        print("No PDFs in documents/. Exiting.")
-        return 0
-
-    # Whole-stem fast path + page-level resume, all BEFORE any model load:
-    # a no-op run must exit in seconds without touching the GPU.
-    work: list[tuple[Path, list[int]]] = []
-    for pdf in pdfs:
-        pages = pending_pages(pdf)
-        if pages:
-            work.append((pdf, pages))
+def resize_if_needed(img, max_size=1800):
+    width, height = img.size
+    if width > 300 or height > 300:
+        if width >= height:
+            scale = max_size / float(width)
+            new_size = (max_size, int(height * scale))
         else:
-            with fitz.open(pdf) as doc:
-                total = doc.page_count
-            print(f"SKIP {pdf.stem}: already has {total}/{total} pages, nothing to do")
-
-    if not work:
-        print("Nothing new to process. Exiting.")
-        return 0
-
-    total_pages = sum(len(pages) for _, pages in work)
-    print(f"{len(work)} document(s), {total_pages} page(s) pending. Loading model...")
-    model, processor = load_model()
-
-    failed_docs: list[str] = []
-    with torch.inference_mode():
-        for pdf, pages in work:
-            print(f"[{pdf.stem}] {len(pages)} pending page(s)", flush=True)
-            if not process_document(model, processor, pdf, pages):
-                failed_docs.append(pdf.name)
-
-    if failed_docs:
-        print(f"FAILED documents ({len(failed_docs)}): {failed_docs}")
-        return 1
-    print("All pending pages completed.")
-    return 0
+            scale = max_size / float(height)
+            new_size = (int(width * scale), max_size)
+        img = img.resize(new_size, Image.Resampling.LANCZOS)
+    return img
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+def render_page(doc, page_index, dpi=200):
+    """Render ONE page lazily (a 280-page book must not be rasterized into
+    RAM upfront, and resumed runs must not render already-done pages)."""
+    zoom = dpi / 72
+    pix = doc[page_index].get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+    return Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+
+
+def page_path(stem, page_no):
+    return os.path.join(output_dir, stem, f"page_{page_no}.md")
+
+
+def page_done(stem, page_no):
+    """Tier 1: page-level resume — non-empty page_<n>.md counts as done."""
+    path = page_path(stem, page_no)
+    return os.path.isfile(path) and os.path.getsize(path) > 0
+
+
+def pending_pages(pdf_path, stem):
+    with fitz.open(pdf_path) as doc:
+        n_pages = len(doc)
+    return n_pages, [n for n in range(1, n_pages + 1) if not page_done(stem, n)]
+
+
+def atomic_write(path, text):
+    """Never leave a partial page_<n>.md a resumed run would wrongly skip."""
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
+# --- Figure out what actually needs work BEFORE loading the model ---
+# (so a re-submit with nothing new exits fast without ever touching the GPU)
+pdf_files = sorted(glob.glob(os.path.join(input_dir, "*.pdf")))
+print(f"Found {len(pdf_files)} PDF(s) in {input_dir}")
+
+to_process = []
+for pdf_path in pdf_files:
+    stem = os.path.splitext(os.path.basename(pdf_path))[0]
+    n_pages, pending = pending_pages(pdf_path, stem)
+    if not pending:
+        print(f"SKIP {stem}: already has {n_pages}/{n_pages} pages, nothing to do")
+    else:
+        to_process.append((pdf_path, stem, n_pages, pending))
+
+if not to_process:
+    print("Nothing new to process. Exiting.")
+    sys.exit(0)
+
+total_pending = sum(len(p) for _, _, _, p in to_process)
+print(f"{len(to_process)} document(s), {total_pending} page(s) need processing. Loading model...")
+
+from transformers import AutoModelForImageTextToText, AutoProcessor
+
+# Tier 1: explicit bf16 + SDPA (dtype="auto" resolved to bf16 anyway; pinned
+# so a config change can never silently flip us to fp32)
+model = AutoModelForImageTextToText.from_pretrained(
+    model_path,
+    torch_dtype=torch.bfloat16,
+    attn_implementation="sdpa",
+    device_map="auto",
+).eval()
+processor = AutoProcessor.from_pretrained(model_path)
+
+
+def run_ocr(img):
+    img = resize_if_needed(img.convert("RGB"))
+    messages = [{"role": "user", "content": [{"type": "image", "image": img}, {"type": "text", "text": prompt}]}]
+    inputs = processor.apply_chat_template(
+        messages, tokenize=True, add_generation_prompt=True, return_dict=True, return_tensors="pt"
+    ).to(model.device)
+    generated_ids = model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS)
+    trimmed = [out[len(inp):] for inp, out in zip(inputs.input_ids, generated_ids)]
+    return processor.batch_decode(trimmed, skip_special_tokens=True)[0]
+
+
+failures = []
+with torch.inference_mode():  # Tier 1
+    for pdf_path, stem, n_pages, pending in to_process:
+        os.makedirs(os.path.join(output_dir, stem), exist_ok=True)
+        print(f"Processing {stem}: {len(pending)}/{n_pages} page(s) pending...", flush=True)
+        doc_failed = False
+        with fitz.open(pdf_path) as doc:
+            for page_no in pending:
+                started = time.monotonic()
+                try:
+                    text = run_ocr(render_page(doc, page_no - 1))
+                    atomic_write(page_path(stem, page_no), text)
+                    print(
+                        f"  [{stem}] page {page_no}/{n_pages} ok "
+                        f"chars={len(text)} {time.monotonic() - started:.1f}s",
+                        flush=True,
+                    )
+                except Exception as e:  # per-page isolation: keep going
+                    doc_failed = True
+                    print(
+                        f"  [{stem}] page {page_no}/{n_pages} FAILED {type(e).__name__}: {e}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+        if doc_failed:
+            failures.append(stem)
+        else:
+            print(f"  [{stem}] done.")
+
+if failures:
+    print(f"Batch OCR finished with {len(failures)} failure(s): {failures}", file=sys.stderr)
+    sys.exit(1)
+
+print("Batch OCR complete, all documents succeeded.")
