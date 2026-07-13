@@ -2666,5 +2666,269 @@
         "NO_TEXT_LAYER"
       ]
     }
+  },
+  "f4a830c194d6_boq.pdf": {
+    "minio_key": "ตำบลท่าช้าง/projects/2565/ประกวดราคาจ้างก่อสร้างถนน คสล. ซอยหลังโรงเรียนบ้านโคกเมา หมู่ที่ 7/boq.pdf",
+    "sha256": "f4a830c194d6fd4babe9115292ac28dd65c25dfa14ca72f0cebdcaceb1061bab",
+    "pages_needing_ocr": [
+      1,
+      2
+    ],
+    "reasons": {
+      "1": [
+        "NO_TEXT_LAYER"
+      ],
+      "2": [
+        "NO_TEXT_LAYER"
+      ]
+    }
+  },
+  "109cf47cf703_tor.pdf": {
+    "minio_key": "ตำบลท่าช้าง/projects/2567/โครงการติดตั้งกล้องโทรทัศน์วงจรปิด/tor.pdf",
+    "sha256": "109cf47cf7039ee25743ecc7792a548acfabdb37ffc47fedf9efad7109d94173",
+    "pages_needing_ocr": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
+    "reasons": {
+      "1": [
+        "NO_TEXT_LAYER"
+      ],
+      "2": [
+        "NO_TEXT_LAYER"
+      ],
+      "3": [
+        "NO_TEXT_LAYER"
+      ],
+      "4": [
+        "NO_TEXT_LAYER"
+      ],
+      "5": [
+        "NO_TEXT_LAYER"
+      ],
+      "6": [
+        "NO_TEXT_LAYER"
+      ],
+      "7": [
+        "NO_TEXT_LAYER"
+      ],
+      "8": [
+        "NO_TEXT_LAYER"
+      ],
+      "9": [
+        "NO_TEXT_LAYER"
+      ],
+      "10": [
+        "NO_TEXT_LAYER"
+      ],
+      "11": [
+        "NO_TEXT_LAYER"
+      ],
+      "12": [
+        "NO_TEXT_LAYER"
+      ],
+      "13": [
+        "NO_TEXT_LAYER"
+      ],
+      "14": [
+        "NO_TEXT_LAYER"
+      ],
+      "15": [
+        "NO_TEXT_LAYER"
+      ],
+      "16": [
+        "NO_TEXT_LAYER"
+      ],
+      "17": [
+        "NO_TEXT_LAYER"
+      ],
+      "18": [
+        "NO_TEXT_LAYER"
+      ]
+    }
+  },
+  "b4d26dda5e9e_tech_spec.pdf": {
+    "minio_key": "ตำบลหัวเขา/projects/2566/โครงการก่อสร้างก่อสร้างถนนคอนกรีตเสริมเหล็ก หมู่ที่ ๔ บ้านวัดไทร/tech_spec.pdf",
+    "sha256": "b4d26dda5e9e90505ba6e0a76ac37a4c8f00bf8683c9f56e88b4bfb6b4e8b3f2",
+    "pages_needing_ocr": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "reasons": {
+      "1": [
+        "NO_TEXT_LAYER"
+      ],
+      "2": [
+        "NO_TEXT_LAYER"
+      ],
+      "3": [
+        "NO_TEXT_LAYER"
+      ],
+      "4": [
+        "NO_TEXT_LAYER"
+      ],
+      "5": [
+        "NO_TEXT_LAYER"
+      ],
+      "6": [
+        "NO_TEXT_LAYER"
+      ],
+      "7": [
+        "NO_TEXT_LAYER"
+      ],
+      "8": [
+        "NO_TEXT_LAYER"
+      ],
+      "9": [
+        "NO_TEXT_LAYER"
+      ],
+      "10": [
+        "NO_TEXT_LAYER"
+      ],
+      "11": [
+        "NO_TEXT_LAYER"
+      ],
+      "12": [
+        "NO_TEXT_LAYER"
+      ],
+      "13": [
+        "NO_TEXT_LAYER"
+      ],
+      "14": [
+        "NO_TEXT_LAYER"
+      ],
+      "15": [
+        "NO_TEXT_LAYER"
+      ]
+    }
+  },
+  "198979a63b52_tor.pdf": {
+    "minio_key": "ตำบลหัวเขา/projects/2567/โครงการก่อสร้างถนน คสล หมู่ ๔ บ้านวัดไทร/tor.pdf",
+    "sha256": "198979a63b521ffc0d7e01846318e4566bb5f3aaff9bce28cf067434b119e550",
+    "pages_needing_ocr": [
+      1,
+      2,
+      3
+    ],
+    "reasons": {
+      "1": [
+        "NO_TEXT_LAYER"
+      ],
+      "2": [
+        "NO_TEXT_LAYER"
+      ],
+      "3": [
+        "NO_TEXT_LAYER"
+      ]
+    }
+  },
+  "791afcd46605_tech_spec.pdf": {
+    "minio_key": "ตำบลหัวเขา/projects/2567/โครงการก่อสร้างถนน คสล หมู่ ๔ บ้านวัดไทร/tech_spec.pdf",
+    "sha256": "791afcd46605856e5d3d1275581a26c2e7fee1f83e5052a64fb2a9001cdc0bd0",
+    "pages_needing_ocr": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "reasons": {
+      "1": [
+        "NO_TEXT_LAYER"
+      ],
+      "2": [
+        "NO_TEXT_LAYER"
+      ],
+      "3": [
+        "NO_TEXT_LAYER"
+      ],
+      "4": [
+        "NO_TEXT_LAYER"
+      ],
+      "5": [
+        "NO_TEXT_LAYER"
+      ],
+      "6": [
+        "NO_TEXT_LAYER"
+      ],
+      "7": [
+        "NO_TEXT_LAYER"
+      ],
+      "8": [
+        "NO_TEXT_LAYER"
+      ],
+      "9": [
+        "NO_TEXT_LAYER"
+      ],
+      "10": [
+        "NO_TEXT_LAYER"
+      ],
+      "11": [
+        "NO_TEXT_LAYER"
+      ],
+      "12": [
+        "NO_TEXT_LAYER"
+      ]
+    }
+  },
+  "635f70b7850b_tor.pdf": {
+    "minio_key": "ตำบลหัวเขา/projects/2568/ก่อสร้างก่อสร้างถนนคอนกรีตเสริมเหล็ก หมู่ที่ ๔ บ้านวัดไทร - หมู่ที่ ๖ บ้านหัวเขา/tor.pdf",
+    "sha256": "635f70b7850b365c5824d36e588e27dac496fe1a02e6fc84b4c1498ba9c72dd4",
+    "pages_needing_ocr": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "reasons": {
+      "1": [
+        "NO_TEXT_LAYER"
+      ],
+      "2": [
+        "NO_TEXT_LAYER"
+      ],
+      "3": [
+        "NO_TEXT_LAYER"
+      ],
+      "4": [
+        "NO_TEXT_LAYER"
+      ]
+    }
   }
 }

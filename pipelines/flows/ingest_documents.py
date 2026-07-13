@@ -172,10 +172,11 @@ def _process_document(
     outbox_name = f"{sha[:12]}_{filename}"
     outbox_stem = outbox_name.rsplit(".", 1)[0]
 
+    full_scan_pages: list[str] | None = None
     with engine.begin() as conn:
         existing = conn.execute(
             text(
-                "SELECT id, content_sha256, parse_status FROM documents "
+                "SELECT id, content_sha256, parse_status, page_count FROM documents "
                 "WHERE minio_key = :key"
             ),
             {"key": plan.minio_key},
@@ -184,21 +185,33 @@ def _process_document(
             if existing.parse_status == "COMPLETED":
                 return "skipped"
             if existing.parse_status == "NEEDS_OCR":
-                # cheap resume: already extracted, outbox already holds the PDF,
-                # and no OCR results are available yet — don't re-run Docling
-                # (a 100-page scanned reference book costs ~10 min per pass)
-                has_ocr = bool(
-                    ocr_results_dir and _load_ocr_pages(ocr_results_dir, outbox_stem)
+                ocr_pages = (
+                    _load_ocr_pages(ocr_results_dir, outbox_stem) if ocr_results_dir else {}
                 )
                 manifest_path = outbox_dir / "outbox.json"
-                queued = (
-                    json.loads(manifest_path.read_text()).get(outbox_name, {}).get("sha256")
+                entry = (
+                    json.loads(manifest_path.read_text()).get(outbox_name, {})
                     if manifest_path.exists()
-                    else None
+                    else {}
                 )
-                if not has_ocr and queued == sha:
-                    logger.info("%s: still awaiting OCR (outbox already staged)", plan.minio_key)
-                    return "needs_ocr"
+                if entry.get("sha256") == sha:
+                    if not ocr_pages:
+                        # cheap resume: already extracted, outbox already holds
+                        # the PDF, no OCR results yet — don't re-run Docling
+                        logger.info(
+                            "%s: still awaiting OCR (outbox already staged)", plan.minio_key
+                        )
+                        return "needs_ocr"
+                    total = existing.page_count or 0
+                    if (
+                        total
+                        and len(entry.get("pages_needing_ocr", [])) == total
+                        and set(range(1, total + 1)) <= set(ocr_pages)
+                    ):
+                        # fully-scanned doc with complete OCR results: every
+                        # word comes from Typhoon-OCR — Docling adds nothing
+                        # and its table model grinds for ages on dense scans
+                        full_scan_pages = [ocr_pages[n] for n in range(1, total + 1)]
         document_id = conn.execute(
             text(
                 """
@@ -227,18 +240,28 @@ def _process_document(
             },
         ).scalar_one()
 
-    with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:
-        tmp.write(pdf_bytes)
-        tmp.flush()
-        pages = extractor(Path(tmp.name))
+    if full_scan_pages is not None:
+        pages = full_scan_pages
+        reports = []
+        garbled = set(range(1, len(pages) + 1))
+        source = "SCANNED"
+        unresolved: set[int] = set()
+        ocr_pages = dict(enumerate(pages, start=1))
+    else:
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:
+            tmp.write(pdf_bytes)
+            tmp.flush()
+            pages = extractor(Path(tmp.name))
 
-    reports = [decide_page(page) for page in pages]
-    garbled = {no for no, report in enumerate(reports, start=1) if report.needs_ocr}
-    scanned = sum(1 for r in reports if NO_TEXT_LAYER in r.reasons) >= max(1, len(pages) // 2)
-    source = "SCANNED" if scanned else "BORN_DIGITAL"
+        reports = [decide_page(page) for page in pages]
+        garbled = {no for no, report in enumerate(reports, start=1) if report.needs_ocr}
+        scanned = (
+            sum(1 for r in reports if NO_TEXT_LAYER in r.reasons) >= max(1, len(pages) // 2)
+        )
+        source = "SCANNED" if scanned else "BORN_DIGITAL"
 
-    ocr_pages = _load_ocr_pages(ocr_results_dir, outbox_stem) if ocr_results_dir else {}
-    unresolved = garbled - set(ocr_pages)
+        ocr_pages = _load_ocr_pages(ocr_results_dir, outbox_stem) if ocr_results_dir else {}
+        unresolved = garbled - set(ocr_pages)
 
     if unresolved:
         outbox_dir.mkdir(parents=True, exist_ok=True)

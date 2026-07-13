@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --partition=gpu-devel
+#SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=8
-#SBATCH --time=00:30:00
+#SBATCH --time=10:30:00
 #SBATCH -J chin_ocr_batch
 #SBATCH -A tn999991
 
