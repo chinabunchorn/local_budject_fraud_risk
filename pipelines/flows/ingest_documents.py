@@ -184,7 +184,9 @@ def _process_document(
         if existing and existing.content_sha256 == sha:
             if existing.parse_status == "COMPLETED":
                 return "skipped"
-            if existing.parse_status == "NEEDS_OCR":
+            if existing.parse_status in ("NEEDS_OCR", "PENDING"):
+                # PENDING happens when a previous run was killed mid-document —
+                # the outbox entry (if sha still matches) remains authoritative
                 ocr_pages = (
                     _load_ocr_pages(ocr_results_dir, outbox_stem) if ocr_results_dir else {}
                 )
@@ -195,11 +197,17 @@ def _process_document(
                     else {}
                 )
                 if entry.get("sha256") == sha:
-                    if not ocr_pages:
+                    needed = set(entry.get("pages_needing_ocr", []))
+                    if not needed <= set(ocr_pages):
                         # cheap resume: already extracted, outbox already holds
-                        # the PDF, no OCR results yet — don't re-run Docling
+                        # the PDF, and OCR results are absent or partial (LANTA
+                        # page-level resume fetches can be) — don't re-run
+                        # Docling until every needed page is available
                         logger.info(
-                            "%s: still awaiting OCR (outbox already staged)", plan.minio_key
+                            "%s: still awaiting OCR (%d/%d needed pages fetched)",
+                            plan.minio_key,
+                            len(needed & set(ocr_pages)),
+                            len(needed),
                         )
                         return "needs_ocr"
                     total = existing.page_count or 0
