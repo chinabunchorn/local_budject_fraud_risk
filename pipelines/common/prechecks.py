@@ -15,8 +15,12 @@ verdict) per the flag-never-accuse rule in CLAUDE.md.
 
 from __future__ import annotations
 
+import re
+from collections import defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal
+
+from common.thai_num import normalize_digits
 
 # เฉพาะเจาะจง is permitted up to this ราคากลาง; above it the e-bidding route
 # applies (ระเบียบกระทรวงการคลัง ข้อ ๒๐ — the threshold-splitting citation).
@@ -25,6 +29,14 @@ SPECIFIC_METHOD_CEILING = Decimal("500000")
 THRESHOLD_PROXIMITY = Decimal("0.05")
 # rounding slack when comparing two independently-stated ราคากลาง figures
 CROSS_CHECK_TOLERANCE = Decimal("0.01")
+# a recurring project whose year-over-year budget grows by at least this much
+# (100% = the budget at least doubles) trips yoy_budget_anomaly (fixed,
+# deterministic — tune here only)
+YOY_GROWTH_THRESHOLD = Decimal("1.00")
+# a contractor winning the recurring project in at least this share of the
+# years it ran (and in ≥2 distinct years) is the "same contractor most years"
+# escalation to HIGH severity
+CONTRACTOR_CONCENTRATION_RATIO = Decimal("0.5")
 
 
 @dataclass(frozen=True)
@@ -244,7 +256,9 @@ def _expected_documents(f: ProjectFacts) -> dict:
 
 
 def compute_prechecks(facts: ProjectFacts) -> list[dict]:
-    """Run every check; order is stable so re-runs produce identical JSONB."""
+    """Run every single-project check; order is stable so re-runs produce
+    identical JSONB. The cross-project YoY check is added by
+    `compute_yoy_findings` (it needs the whole sub-district portfolio)."""
     return [
         _cross_check_reference_price(facts),
         _boq_vs_form(facts),
@@ -254,3 +268,221 @@ def compute_prechecks(facts: ProjectFacts) -> list[dict]:
         _procurement_threshold(facts),
         _expected_documents(facts),
     ]
+
+
+# ---------------------------------------------------------------------------
+# Year-over-year recurring-project redundancy + contractor concentration.
+#
+# A cross-project, cross-year check over the curated `projects`/`bids` tables
+# (no PDF parsing): recurring projects (same sub-district, same work-type and
+# location across fiscal years) whose budget spikes year-over-year are FLAGged,
+# and when the same contractor won the recurring project across most of those
+# years the finding escalates to severity HIGH with a factual justification.
+# Deterministic and non-accusatory throughout.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ProjectRecord:
+    project_id: str
+    sub_district_id: str
+    fiscal_year: int
+    name_th: str
+    budget: Decimal | None = None
+    winner: str | None = None  # winning contractor (bids.bidder_name_th where is_winner)
+
+
+# canonical work-type → filename-style keywords (searched on a de-spaced,
+# ค.ส.ล./คอนกรีตเสริมเหล็ก-normalized name). First match wins.
+_WORK_TYPES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("ถนนคสล", ("ถนนคสล",)),
+    ("ถนนดิน", ("ถนนดิน",)),
+    ("ถนนลูกรัง", ("ถนนลูกรัง", "ถนนลุกรัง")),
+    ("ท่อระบายน้ำ", ("ท่อระบายน้ำ",)),
+    ("ห้องน้ำ", ("ห้องน้ำ",)),
+    ("อาคาร", ("อาคาร",)),
+    ("กล้องวงจรปิด", ("กล้อง", "cctv")),
+    ("ซ่อมรถ", ("ซ่อมรถ", "ซ่อมแซมรถ")),
+    ("จัดซื้อรถ", ("จัดซื้อรถ", "รถบรรทุก")),
+)
+
+
+def _work_type(name: str) -> str | None:
+    squashed = (
+        normalize_digits(name)
+        .replace(" ", "")
+        .replace(".", "")
+        .replace("คอนกรีตเสริมเหล็ก", "คสล")
+    ).lower()
+    for label, keywords in _WORK_TYPES:
+        if any(kw in squashed for kw in keywords):
+            return label
+    return None
+
+
+def _locations(name: str) -> tuple[set[str], set[str]]:
+    """(หมู่ numbers, บ้าน names) — the location fingerprint of a project."""
+    norm = normalize_digits(name)
+    moo = set(re.findall(r"หมู่\s*(?:ที่)?\s*(\d+)", norm))
+    villages = {
+        re.sub(r"[^ก-๙a-zA-Z0-9]+$", "", v) for v in re.findall(r"บ้าน(\S{2,})", norm)
+    }
+    return moo, villages
+
+
+def _same_recurring(a: ProjectRecord, b: ProjectRecord) -> bool:
+    """Same recurring project: identical work-type and an overlapping location.
+
+    บ้าน names disambiguate best, so when both carry them they must intersect;
+    only when a name lacks a บ้าน token do we fall back to the หมู่ number."""
+    wa = _work_type(a.name_th)
+    if wa is None or wa != _work_type(b.name_th):
+        return False
+    moo_a, village_a = _locations(a.name_th)
+    moo_b, village_b = _locations(b.name_th)
+    if village_a and village_b:
+        return bool(village_a & village_b)
+    return bool(moo_a & moo_b)
+
+
+def _cluster_recurring(records: list[ProjectRecord]) -> list[list[ProjectRecord]]:
+    """Union-find the records into recurring-project clusters (transitive)."""
+    parent = list(range(len(records)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i in range(len(records)):
+        for j in range(i + 1, len(records)):
+            if _same_recurring(records[i], records[j]):
+                parent[find(i)] = find(j)
+
+    clusters: dict[int, list[ProjectRecord]] = defaultdict(list)
+    for i, record in enumerate(records):
+        clusters[find(i)].append(record)
+    return list(clusters.values())
+
+
+def _repeat_contractor(
+    cluster: list[ProjectRecord], years: list[int]
+) -> tuple[str, list[int], Decimal] | None:
+    """The contractor that won the recurring project in the most distinct years,
+    if that is ≥2 years and ≥ the concentration ratio of the years it ran.
+    Returns (contractor, won_years, cumulative_budget)."""
+    won_years: dict[str, set[int]] = defaultdict(set)
+    cumulative: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    for record in cluster:
+        if not record.winner:
+            continue
+        won_years[record.winner].add(record.fiscal_year)
+        if record.budget is not None:
+            cumulative[record.winner] += record.budget
+    if not won_years:
+        return None
+    top = max(sorted(won_years), key=lambda name: len(won_years[name]))
+    span = sorted(won_years[top])
+    if len(span) >= 2 and Decimal(len(span)) / Decimal(len(years)) >= (
+        CONTRACTOR_CONCENTRATION_RATIO
+    ):
+        return top, span, cumulative[top]
+    return None
+
+
+def _representative(cluster: list[ProjectRecord]) -> ProjectRecord:
+    return max(cluster, key=lambda r: (r.budget or Decimal("0"), r.fiscal_year))
+
+
+def yoy_ok_finding() -> dict:
+    """Default 8th check for a project with no flagged recurring pattern."""
+    return _finding(
+        "yoy_budget_anomaly", "OK",
+        "no recurring same-location project with a year-over-year budget spike",
+    )
+
+
+def _yoy_finding(
+    cluster: list[ProjectRecord],
+    years: list[int],
+    budget_by_year: dict[int, Decimal | None],
+    max_growth: Decimal,
+    spike: tuple[int, int],
+    repeat: tuple[str, list[int], Decimal] | None,
+) -> dict:
+    rep = _representative(cluster)
+    values: dict[str, object] = {
+        "recurring_scope": rep.name_th,
+        "fiscal_years": years,
+        "recurrence_count": len(cluster),
+        "budget_by_year": {str(y): _s(budget_by_year[y]) for y in years},
+        "max_yoy_growth": _s(max_growth),
+        "spike_from_year": spike[0],
+        "spike_to_year": spike[1],
+        "severity": "MEDIUM",
+    }
+    detail = (
+        f"recurring same-location project across fiscal years {years}; "
+        f"budget grew up to {max_growth * 100:.0f}% between "
+        f"{spike[0]} and {spike[1]} — requires review"
+    )
+    if repeat is not None:
+        contractor, span, cumulative = repeat
+        values["severity"] = "HIGH"
+        values["repeat_contractor"] = contractor
+        values["contractor_win_years"] = span
+        values["contractor_win_count"] = len(span)
+        values["contractor_cumulative_budget"] = _s(cumulative)
+        values["justification"] = (
+            f"[ระดับความเสี่ยง: สูง] โครงการเกิดซ้ำในพื้นที่เดียวกัน ปรากฏใน {len(years)} "
+            f"ปีงบประมาณ ({', '.join(map(str, years))}); "
+            f"งบประมาณเพิ่มขึ้นสูงสุด {max_growth * 100:.0f}% ระหว่างปี {spike[0]}–{spike[1]}; "
+            f"ผู้รับจ้างรายเดียวกัน ({contractor}) เป็นผู้ชนะ {len(span)} ครั้ง "
+            f"ในปี {', '.join(map(str, span))} รวมมูลค่างานสะสม {cumulative:,.2f} บาท; "
+            f"ควรตรวจสอบเพิ่มเติมโดยผู้ตรวจสอบเป็นผู้วินิจฉัยขั้นสุดท้าย"
+        )
+    return {"name": "yoy_budget_anomaly", "status": "FLAG", "detail": detail, "values": values}
+
+
+def compute_yoy_findings(
+    records: list[ProjectRecord], threshold: Decimal = YOY_GROWTH_THRESHOLD
+) -> dict[str, dict]:
+    """project_id → yoy_budget_anomaly finding, for every project in a recurring
+    cluster whose year-over-year budget spikes past `threshold`. Projects with
+    no flagged pattern are absent (callers use `yoy_ok_finding`)."""
+    by_sub: dict[str, list[ProjectRecord]] = defaultdict(list)
+    for record in records:
+        by_sub[record.sub_district_id].append(record)
+
+    findings: dict[str, dict] = {}
+    for _sub_id, sub_records in sorted(by_sub.items()):
+        for cluster in _cluster_recurring(sub_records):
+            years = sorted({r.fiscal_year for r in cluster})
+            if len(years) < 2:
+                continue
+            budget_by_year: dict[int, Decimal | None] = {}
+            for year in years:
+                budgets = [
+                    r.budget for r in cluster if r.fiscal_year == year and r.budget is not None
+                ]
+                budget_by_year[year] = sum(budgets, Decimal("0")) if budgets else None
+
+            max_growth: Decimal | None = None
+            spike: tuple[int, int] | None = None
+            for prev, curr in zip(years, years[1:], strict=False):
+                before, after = budget_by_year[prev], budget_by_year[curr]
+                if before and after and before > 0:
+                    growth = ((after - before) / before).quantize(Decimal("0.0001"))
+                    if growth >= threshold and (max_growth is None or growth > max_growth):
+                        max_growth, spike = growth, (prev, curr)
+            if max_growth is None or spike is None:
+                continue
+
+            finding = _yoy_finding(
+                cluster, years, budget_by_year, max_growth, spike,
+                _repeat_contractor(cluster, years),
+            )
+            for record in cluster:
+                findings[record.project_id] = finding
+    return findings

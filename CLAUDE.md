@@ -156,16 +156,26 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
    (10 docs incl. the 280-page table book) stay NEEDS_OCR by decision — deferred.
 6. DONE — structured extraction (Phase F), 100% deterministic, no LLM
    (`flows/extract_structured.py` + `common/{thai_num,structured_extract,prechecks}.py`,
-   44 tests). All 20 projects: budget_total / reference_price / contract_price /
-   procurement_method + 51 `bids` rows (20 winners) + `precheck_results` (migration 0004).
-   Decisions from the real data: **bids come from the contract-summary §6/§7 tables**
-   (born-digital, bidders WITH amounts + winner) — บก.๐๖ §5 lists price-reference SOURCES,
-   not competitive bidders, so it can't fill `bid_amount`; บก.01/บก.๐๖ ราคากลาง is a
-   cross-check (agrees with the contract summary on all 7 forms). **BOQ = stated grand total
-   only** (budget_lines per-line deferred — OCR'd BOQ tables are too noisy for exact
-   arithmetic; the digit total is often only in Thai words, so `boq_vs_bk01` reports NA
-   rather than fabricate). Labor-rate / Factor-F prechecks deferred (need the เอกสารกลาง
-   reference tables, still NEEDS_OCR).
+   53 tests). All 20 projects: budget_total / reference_price / contract_price /
+   procurement_method + 51 `bids` rows (20 winners) + `precheck_results` (migration 0004),
+   8 checks per project. Decisions from the real data: **bids come from the contract-summary
+   §6/§7 tables** (born-digital, bidders WITH amounts + winner) — บก.๐๖ §5 lists
+   price-reference SOURCES, not competitive bidders, so it can't fill `bid_amount`;
+   บก.01/บก.๐๖ ราคากลาง is a cross-check (agrees with the contract summary on all 7 forms).
+   **BOQ = stated grand total only** (budget_lines per-line deferred — OCR'd BOQ tables are
+   too noisy for exact arithmetic; the digit total is often only in Thai words, so
+   `boq_vs_bk01` reports NA rather than fabricate). Labor-rate / Factor-F prechecks deferred
+   (need the เอกสารกลาง reference tables, still NEEDS_OCR).
+   The 8th check `yoy_budget_anomaly` is a cross-project, cross-year pass over the curated
+   `projects`/`bids` (NOT budget-report PDFs, by decision): recurring same-location projects
+   (work-type + บ้าน/หมู่ match) whose budget grows ≥100% YoY (a full doubling) are FLAGged,
+   and when the same
+   contractor won the recurring project in ≥2 of its years it escalates to `severity: HIGH`
+   with a factual `[ระดับความเสี่ยง: สูง]` justification (repetitions, years, cumulative
+   award). On the real corpus this flags the ตำบลหัวเขา หมู่ ๔ บ้านวัดไทร road (2566–2568,
+   919k→7.79M spike, ส. พงษ์พัฒนา won 2 yrs / ฿3.571M). `severity` stays inside the check —
+   the {LOW,MEDIUM,HIGH,REQUIRES_INVESTIGATION} risk *verdict* enum remains reserved for the
+   guardrails-validated Phase-G LLM path.
 7. NEXT — score_risk flow: vLLM client (guided_json → RiskAssessment, temp 0) + Langfuse
    tracing on every call → guardrails stage, feeding on the `precheck_results` evidence.
    Then the Typhoon-vs-Qwen3-32B eval decision point.

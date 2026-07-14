@@ -20,11 +20,19 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from decimal import Decimal
 
 from prefect import flow, get_run_logger, task
 from sqlalchemy import create_engine, text
 
-from common.prechecks import BidFact, ProjectFacts, compute_prechecks
+from common.prechecks import (
+    BidFact,
+    ProjectFacts,
+    ProjectRecord,
+    compute_prechecks,
+    compute_yoy_findings,
+    yoy_ok_finding,
+)
 from common.settings import database_url
 from common.structured_extract import (
     ContractSummary,
@@ -42,9 +50,24 @@ _FINANCIAL_DOC_TYPES = ("contract_summary", "bk01", "bk06", "boq")
 @dataclass
 class ProjectDocs:
     project_id: str
+    sub_district_id: str
+    fiscal_year: int
     name_th: str
     texts: dict[str, str]  # doc_type → reconstructed markdown (first doc of that type)
     present_doc_types: set[str]
+
+
+@dataclass
+class Extracted:
+    """Per-project result carried to the portfolio-level YoY pass."""
+
+    project_id: str
+    sub_district_id: str
+    fiscal_year: int
+    name_th: str
+    budget: Decimal | None
+    winner_name: str | None
+    checks: list[dict]  # the seven single-project checks
 
 
 @task
@@ -55,7 +78,10 @@ def load_projects() -> list[ProjectDocs]:
     try:
         with engine.connect() as conn:
             projects = conn.execute(
-                text("SELECT id, name_th FROM projects ORDER BY name_th")
+                text(
+                    "SELECT id, sub_district_id, fiscal_year, name_th "
+                    "FROM projects ORDER BY name_th"
+                )
             ).fetchall()
             present = conn.execute(
                 text(
@@ -94,7 +120,8 @@ def load_projects() -> list[ProjectDocs]:
         ).append((r.chunk_index, r.page, r.text))
 
     out: list[ProjectDocs] = []
-    for pid, name in ((str(p.id), p.name_th) for p in projects):
+    for p in projects:
+        pid = str(p.id)
         texts: dict[str, str] = {}
         for doc_type, docs in grouped.get(pid, {}).items():
             first_doc = next(iter(docs.values()))
@@ -102,7 +129,9 @@ def load_projects() -> list[ProjectDocs]:
         out.append(
             ProjectDocs(
                 project_id=pid,
-                name_th=name,
+                sub_district_id=str(p.sub_district_id),
+                fiscal_year=p.fiscal_year,
+                name_th=p.name_th,
                 texts=texts,
                 present_doc_types=present_by_project.get(pid, set()),
             )
@@ -142,12 +171,15 @@ def _match(name: str) -> str:
 
 
 @task
-def extract_project(docs: ProjectDocs) -> str:
+def extract_project(docs: ProjectDocs) -> Extracted | None:
+    """Extract one project: write its projects/bids rows and compute the seven
+    single-project checks. Returns the record the YoY pass needs, or None when
+    there is no contract summary to extract from."""
     logger = get_run_logger()
     summary_text = docs.texts.get("contract_summary")
     if not summary_text:
         logger.warning("%s: no contract summary — skipped", docs.name_th)
-        return "skipped"
+        return None
 
     summary = parse_contract_summary(summary_text)
     facts = _facts(docs, summary)
@@ -196,18 +228,6 @@ def extract_project(docs: ProjectDocs) -> str:
                         "winner": bid.is_winner,
                     },
                 )
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO precheck_results (project_id, checks)
-                    VALUES (:pid, CAST(:checks AS jsonb))
-                    ON CONFLICT (project_id) DO UPDATE SET
-                        checks = EXCLUDED.checks,
-                        generated_at = now()
-                    """
-                ),
-                {"pid": docs.project_id, "checks": json.dumps(checks, ensure_ascii=False)},
-            )
     finally:
         engine.dispose()
 
@@ -218,16 +238,74 @@ def extract_project(docs: ProjectDocs) -> str:
         docs.name_th, summary.procurement_method, summary.budget,
         summary.reference_price, facts.contract_price, len(facts.bids), flags, warns,
     )
-    return "extracted"
+    return Extracted(
+        project_id=docs.project_id,
+        sub_district_id=docs.sub_district_id,
+        fiscal_year=docs.fiscal_year,
+        name_th=docs.name_th,
+        budget=summary.budget,
+        winner_name=summary.winner.name if summary.winner else None,
+        checks=checks,
+    )
+
+
+@task
+def write_precheck_results(project_id: str, checks: list[dict]) -> str:
+    """Upsert the full checks array (seven single-project + the YoY finding).
+    THE write path into precheck_results — idempotent on project_id."""
+    engine = create_engine(database_url())
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO precheck_results (project_id, checks)
+                    VALUES (:pid, CAST(:checks AS jsonb))
+                    ON CONFLICT (project_id) DO UPDATE SET
+                        checks = EXCLUDED.checks,
+                        generated_at = now()
+                    """
+                ),
+                {"pid": project_id, "checks": json.dumps(checks, ensure_ascii=False)},
+            )
+    finally:
+        engine.dispose()
+    return next((c["status"] for c in checks if c["name"] == "yoy_budget_anomaly"), "OK")
 
 
 @flow(name="extract-structured")
 def extract_structured() -> dict[str, int]:
     logger = get_run_logger()
-    projects = load_projects()
-    tally: dict[str, int] = {"extracted": 0, "skipped": 0}
-    for docs in projects:
-        tally[extract_project(docs)] += 1
+    docs = load_projects()
+    extracted = [e for e in (extract_project(d) for d in docs) if e is not None]
+
+    # portfolio-level YoY redundancy + contractor concentration over the curated
+    # projects/bids (no PDF parsing) — the 8th check, attached per project.
+    records = [
+        ProjectRecord(
+            project_id=e.project_id,
+            sub_district_id=e.sub_district_id,
+            fiscal_year=e.fiscal_year,
+            name_th=e.name_th,
+            budget=e.budget,
+            winner=e.winner_name,
+        )
+        for e in extracted
+    ]
+    yoy = compute_yoy_findings(records)
+
+    yoy_flagged = 0
+    for e in extracted:
+        finding = yoy.get(e.project_id, yoy_ok_finding())
+        if finding["status"] == "FLAG":
+            yoy_flagged += 1
+        write_precheck_results(e.project_id, [*e.checks, finding])
+
+    tally = {
+        "extracted": len(extracted),
+        "skipped": len(docs) - len(extracted),
+        "yoy_flagged": yoy_flagged,
+    }
     logger.info("structured-extraction summary: %s", tally)
     return tally
 
