@@ -176,6 +176,19 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
    919k→7.79M spike, ส. พงษ์พัฒนา won 2 yrs / ฿3.571M). `severity` stays inside the check —
    the {LOW,MEDIUM,HIGH,REQUIRES_INVESTIGATION} risk *verdict* enum remains reserved for the
    guardrails-validated Phase-G LLM path.
-7. NEXT — score_risk flow: vLLM client (guided_json → RiskAssessment, temp 0) + Langfuse
-   tracing on every call → guardrails stage, feeding on the `precheck_results` evidence.
+7. BUILT (Phase G), real run pending a LANTA window — score_risk flow
+   (`flows/score_risk.py` + `common/{vllm,observability,scoring_evidence}.py`, 7 tests).
+   Per project: `assemble_evidence` builds the v1 prompt context from committed data only —
+   the Phase-F financial facts + all 8 `precheck_results` findings (the model reasons over the
+   settled arithmetic, never recomputes), real `chunk_id`-labelled document excerpts (so
+   `Citation`s resolve), and the exact regulation sections the factor templates cite. Then
+   `VLLMClient` calls the tunnel endpoint (`VLLM_BASE_URL`, OpenAI-compatible, `guided_json`
+   bound to `RiskAssessment` via XGrammar, temp 0), Langfuse-traced (the `<think>` trace goes
+   to Langfuse ONLY), → the guardrails stage (the sole write path into `risk_results`), with a
+   bounded 1× re-ask that feeds the violation list back. Verified end-to-end against a stub on
+   the real corpus (evidence → guardrails → risk_results write passes schema/regulation/
+   lexicon/citation checks; mock verdict cleaned up). **Execution decisions:** live tunnel
+   (roadmap step 7), not offline batch; the `assess` callable is injectable so the offline
+   path can be added later. **The real Typhoon scoring run is an attended runbook step** —
+   2FA blocks unattended tunnel bring-up (same as prior LANTA phases).
    Then the Typhoon-vs-Qwen3-32B eval decision point.
