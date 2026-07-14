@@ -176,7 +176,14 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
    919k→7.79M spike, ส. พงษ์พัฒนา won 2 yrs / ฿3.571M). `severity` stays inside the check —
    the {LOW,MEDIUM,HIGH,REQUIRES_INVESTIGATION} risk *verdict* enum remains reserved for the
    guardrails-validated Phase-G LLM path.
-7. BUILT (Phase G), full batch pending a stable LANTA window — score_risk flow
+7. DONE (Phase G) — real Typhoon-2.5 run complete: all 20 projects scored, 0 rejected, 68
+   citations all resolve, 0 banned terms across every output; 19/20 with full 5 factors (one
+   project dropped 2 factors after retries → weights renormalized). Distribution 15 MEDIUM /
+   4 REQUIRES_INVESTIGATION / 1 LOW; the ตำบลหัวเขา วัดไทร cluster (2566–2568) all landed
+   REQUIRES_INVESTIGATION off the Phase-F YoY HIGH-severity pre-check, and the model's
+   BUDGET_DEVIATION reasoning cited the 748% spike — the demo's high-risk story works
+   end-to-end. ~22 min for 20 (`model_id=scb10x/typhoon2.5-qwen3-30b-a3b`, prompt_version
+   risk_scoring/v2). score_risk flow
    (`flows/score_risk.py` + `common/{vllm,observability,scoring_evidence,aggregation}.py`,
    16 tests). Per project: `assemble_evidence` builds prompt context from committed data only
    — Phase-F financial facts + all 8 `precheck_results` findings (the model reasons over the
@@ -185,7 +192,7 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
    risk_scoring/v2), forced by the fixed 8192 window:** a full 5-factor `RiskAssessment` output
    is ~3.8k tokens and, with the ~2.5k-token factor definitions, cannot fit meaningful evidence
    in one call (measured live — it truncated). So each factor is scored in its own call
-   (`guided_json` → `FactorAssessment`, temp 0, tunnel, Langfuse-traced), then DETERMINISTIC
+   (`guided_json` → `FactorAssessment`, tunnel, Langfuse-traced), then DETERMINISTIC
    aggregation (`common/aggregation.py`) combines them: weighted `overall_score` (equal weights
    until calibration), banded `risk_level` with a HIGH-severity pre-check forcing
    REQUIRES_INVESTIGATION (verdict is code, not the LLM's free choice), templated non-accusatory
@@ -195,8 +202,11 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
    **Live serving realities (verified, differ from repo assumptions):** the container is vLLM
    **0.9.2** (not 0.11.0); served alias is `typhoon-chat` (decoupled from provenance `model_id`
    `scb10x/…` via `/v1/models` root); request-level `guided_decoding_backend` is rejected (400)
-   and there is no per-request whitespace control, so guided decoding intermittently
-   whitespace-loops and truncates — mitigated by `max_tokens` + a fresh per-factor retry
-   (temp 0 is non-deterministic under TP2). The plain-`ssh -N` tunnel drops under load, so the
-   flow is **resumable** (skips already-scored projects; stops cleanly on tunnel death; re-run
-   continues). Then the Typhoon-vs-Qwen3-32B eval decision point.
+   and there is no per-request whitespace control, so under pure greedy (temp 0) guided decoding
+   **whitespace-loops** on indentation before a constrained token until it truncates (invalid
+   JSON). Fixed with **temperature 0.5 + repetition_penalty 1.1** (lets it escape the loop;
+   guided_json still constrains the tokens and the verdict is aggregated deterministically) +
+   `max_tokens` for fast-fail + up to 5 fresh per-factor retries — yielded 98/100 factor calls
+   valid on the real run. The plain-`ssh -N` tunnel drops under load, so the flow is
+   **resumable** (client retries transient drops; skips already-scored projects; stops cleanly
+   on tunnel death; re-run continues). Then the Typhoon-vs-Qwen3-32B eval decision point.

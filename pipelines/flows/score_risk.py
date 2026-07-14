@@ -47,10 +47,19 @@ logger = logging.getLogger(__name__)
 Assess = Callable[[list[dict[str, str]]], str]
 
 _FACTOR_SCHEMA = FactorAssessment.model_json_schema()
-# one factor completes in ~1k tokens; cap bounds the whitespace-loop degeneration
-_MAX_FACTOR_TOKENS = 2048
-# total attempts per factor (a fresh generation clears the intermittent loop)
-_FACTOR_ATTEMPTS = 3
+# one factor completes in ~0.7–1k tokens; cap bounds a degenerate attempt so it
+# fails fast (~14s) instead of running to the full window
+_MAX_FACTOR_TOKENS = 1536
+# total attempts per factor
+_FACTOR_ATTEMPTS = 5
+# vLLM 0.9.2 guided decoding whitespace-loops under pure greedy (temp 0),
+# looping on indentation before a constrained token until it truncates. A small
+# temperature lets it escape the loop and repetition_penalty discourages the
+# repeated whitespace; both trade a little reproducibility for actually-valid
+# output (the schema still constrains the tokens; the verdict is aggregated
+# deterministically downstream regardless).
+_SAMPLING_TEMPERATURE = 0.5
+_SAMPLING_EXTRA = {"repetition_penalty": 1.1}
 
 
 def _default_assess() -> Assess:
@@ -59,7 +68,12 @@ def _default_assess() -> Assess:
 
     def assess(messages: list[dict[str, str]]) -> str:
         return client.generate_json(
-            messages, _FACTOR_SCHEMA, name="risk_scoring", max_tokens=_MAX_FACTOR_TOKENS
+            messages,
+            _FACTOR_SCHEMA,
+            name="risk_scoring",
+            temperature=_SAMPLING_TEMPERATURE,
+            max_tokens=_MAX_FACTOR_TOKENS,
+            extra_body=_SAMPLING_EXTRA,
         )
 
     return assess

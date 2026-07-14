@@ -63,9 +63,14 @@ class VLLMClient:
         name: str = "llm",
         temperature: float = 0.0,
         max_tokens: int | None = None,
+        extra_body: dict | None = None,
         metadata: dict | None = None,
     ) -> str:
-        """Return the guided-JSON content for `messages` bound to `schema`."""
+        """Return the guided-JSON content for `messages` bound to `schema`.
+
+        `extra_body` carries extra sampling params (e.g. `repetition_penalty`) —
+        used to fight the whitespace-loop degeneration this vLLM has under greedy
+        guided decoding."""
         body: dict = {
             "model": self._model,
             "messages": messages,
@@ -75,6 +80,7 @@ class VLLMClient:
             # override, so we never send one. `guided_json` alone also suppresses
             # any <think> prefix — the grammar admits only schema tokens.
             "guided_json": schema,
+            **(extra_body or {}),
         }
         if max_tokens is not None:
             # bound the intermittent whitespace-loop degeneration (the JSON
