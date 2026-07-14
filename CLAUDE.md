@@ -150,11 +150,22 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
 4. DONE — prompts v1 (`pipelines/prompts/risk_scoring/v1/`, per-factor, reasoning steps,
    banned words never in templates) + guardrails stage (`common/guardrails_stage.py`) as the
    ONLY write path into `risk_results` (schema → regulation refs → lexicon → citations).
-**Remaining:**
-5. ATTENDED: LANTA OCR session (`python -m hpc_io.ocr_batch stage/submit/status/fetch`) →
-   ingestion pass 2 (`ocr_results_dir=...`) completes the 28 outbox docs.
-6. Structured extraction into projects/bids/budget_lines (บก.01 reference price, contract
-   summary winner+price, บก.06 bidders, budget reports) + deterministic prechecks
-   (BOQ↔บก.01 sum, labor rates, Factor F, expected-docs-per-route).
-7. score_risk flow: vLLM client (guided_json → RiskAssessment, temp 0) + Langfuse tracing
-   on every call → guardrails stage. Then the Typhoon-vs-Qwen3-32B eval decision point.
+5. DONE — LANTA OCR pass 2 closed the ingestion loop: all 42 project docs + 8 budget
+   reports COMPLETED (1,289 chunks, 688 recovered via Typhoon-OCR); retrieval on
+   previously-invisible scanned TORs/บก forms verified. The เอกสารกลาง reference books
+   (10 docs incl. the 280-page table book) stay NEEDS_OCR by decision — deferred.
+6. DONE — structured extraction (Phase F), 100% deterministic, no LLM
+   (`flows/extract_structured.py` + `common/{thai_num,structured_extract,prechecks}.py`,
+   44 tests). All 20 projects: budget_total / reference_price / contract_price /
+   procurement_method + 51 `bids` rows (20 winners) + `precheck_results` (migration 0004).
+   Decisions from the real data: **bids come from the contract-summary §6/§7 tables**
+   (born-digital, bidders WITH amounts + winner) — บก.๐๖ §5 lists price-reference SOURCES,
+   not competitive bidders, so it can't fill `bid_amount`; บก.01/บก.๐๖ ราคากลาง is a
+   cross-check (agrees with the contract summary on all 7 forms). **BOQ = stated grand total
+   only** (budget_lines per-line deferred — OCR'd BOQ tables are too noisy for exact
+   arithmetic; the digit total is often only in Thai words, so `boq_vs_bk01` reports NA
+   rather than fabricate). Labor-rate / Factor-F prechecks deferred (need the เอกสารกลาง
+   reference tables, still NEEDS_OCR).
+7. NEXT — score_risk flow: vLLM client (guided_json → RiskAssessment, temp 0) + Langfuse
+   tracing on every call → guardrails stage, feeding on the `precheck_results` evidence.
+   Then the Typhoon-vs-Qwen3-32B eval decision point.
