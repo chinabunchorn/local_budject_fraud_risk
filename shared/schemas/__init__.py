@@ -13,6 +13,7 @@ from schemas.guardrails import (
     lexicon_violations,
 )
 from schemas.risk import (
+    FactorAssessment,
     ReasoningStep,
     ReasoningStepType,
     RegulationReference,
@@ -33,6 +34,7 @@ __all__ = [
     "LexiconViolation",
     "find_banned_terms",
     "lexicon_violations",
+    "FactorAssessment",
     "ReasoningStep",
     "ReasoningStepType",
     "RegulationReference",

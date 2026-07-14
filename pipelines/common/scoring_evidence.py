@@ -29,9 +29,15 @@ from common.prompts import PromptBundle
 
 # project doc_types worth citing, in priority order
 _EXCERPT_DOC_TYPES = ("contract_summary", "bk01", "bk06", "tor", "tech_spec", "boq")
-_MAX_EXCERPTS = 24
-_MAX_EXCERPT_CHARS = 3500  # keep the whole prompt under --max-model-len 8192
-_MAX_REG_CHARS = 700
+# Per-factor scoring (v2) sends this evidence once per factor with only ONE
+# factor definition, so the output is small (~0.8k tokens) and evidence can be
+# generous within the 8192 window.
+_MAX_EXCERPTS = 8
+_MAX_EXCERPT_CHARS = 3000
+_MAX_REG_CHARS = 400
+# take a few chunks from EACH doc_type rather than filling the budget with one
+# long document — so different factors have diverse documents to cite
+_MAX_PER_DOC_TYPE = 2
 
 _METHOD_TH = {
     "E_BIDDING": "ประกวดราคาอิเล็กทรอนิกส์ (e-bidding)",
@@ -51,6 +57,14 @@ class ProjectEvidence:
     budget_lines: str
     document_excerpts: str
     regulation_context: str
+    # the chunk_ids / regulation_ids actually offered to the model — the flow
+    # filters model citations to these so the guardrails checks can't fail on a
+    # hallucinated reference
+    excerpt_chunk_ids: list[str]
+    regulation_ids: list[str]
+    # a HIGH-severity deterministic pre-check (e.g. YoY contractor concentration)
+    # forces REQUIRES_INVESTIGATION in aggregation
+    has_high_severity_precheck: bool
 
 
 def regulation_ids_in(bundle: PromptBundle) -> list[str]:
@@ -65,7 +79,7 @@ def _amount(value) -> str:
     return f"{Decimal(value):,.2f}" if value is not None else "—"
 
 
-def _budget_block(proj, bids, checks) -> str:
+def _budget_block(proj, bids, check_list) -> str:
     method = _METHOD_TH.get(proj.procurement_method, proj.procurement_method or "—")
     lines = [
         f"- วิธีจัดซื้อจัดจ้าง: {method}",
@@ -79,7 +93,6 @@ def _budget_block(proj, bids, checks) -> str:
             f"{' (ผู้ชนะ)' if b.is_winner else ''}"
             for b in bids
         )
-    check_list = checks if isinstance(checks, list) else (json.loads(checks) if checks else [])
     if check_list:
         lines.append("- ผลการตรวจสอบเชิงกฎเกณฑ์อัตโนมัติ (คำนวณด้วยรหัส ไม่ใช่โมเดล):")
         for check in check_list:
@@ -93,11 +106,17 @@ def _budget_block(proj, bids, checks) -> str:
     return "\n".join(lines)
 
 
-def _excerpt_block(chunks) -> str:
-    ordered = sorted(
-        chunks, key=lambda c: (_EXCERPT_DOC_TYPES.index(c.doc_type), c.chunk_index)
-    )
+def _excerpt_block(chunks) -> tuple[str, list[str]]:
+    by_type: dict[str, list] = {}
+    for chunk in chunks:
+        by_type.setdefault(chunk.doc_type, []).append(chunk)
+    # a few chunks per doc_type, doc_types in priority order → diverse citations
+    ordered = []
+    for doc_type in _EXCERPT_DOC_TYPES:
+        picks = sorted(by_type.get(doc_type, []), key=lambda c: c.chunk_index)
+        ordered.extend(picks[:_MAX_PER_DOC_TYPE])
     out: list[str] = []
+    chunk_ids: list[str] = []
     total = 0
     for chunk in ordered[:_MAX_EXCERPTS]:
         body = chunk.text.strip()
@@ -105,12 +124,15 @@ def _excerpt_block(chunks) -> str:
             break
         page = f", หน้า {chunk.page}" if chunk.page else ""
         out.append(f"[chunk_id: {chunk.id}] (เอกสาร: {chunk.doc_type}{page})\n{body}")
+        chunk_ids.append(str(chunk.id))
         total += len(body)
-    return "\n\n".join(out) if out else "(ไม่มีข้อความเอกสารที่สกัดได้)"
+    text = "\n\n".join(out) if out else "(ไม่มีข้อความเอกสารที่สกัดได้)"
+    return text, chunk_ids
 
 
-def _regulation_block(regs) -> str:
+def _regulation_block(regs) -> tuple[str, list[str]]:
     out = []
+    codes: list[str] = []
     for reg in regs:
         title = f" {reg.section_title_th}" if reg.section_title_th else ""
         body = reg.text.strip()[:_MAX_REG_CHARS]
@@ -118,7 +140,9 @@ def _regulation_block(regs) -> str:
             f"[regulation_id: {reg.regulation_code}] {reg.act_name_th} "
             f"มาตรา/ข้อ {reg.section_no}{title}\n{body}"
         )
-    return "\n\n".join(out) if out else "(ไม่มีบริบทกฎหมาย)"
+        codes.append(reg.regulation_code)
+    text = "\n\n".join(out) if out else "(ไม่มีบริบทกฎหมาย)"
+    return text, codes
 
 
 def assemble_evidence(
@@ -172,13 +196,23 @@ def assemble_evidence(
             else []
         )
 
+    check_list = checks if isinstance(checks, list) else (json.loads(checks) if checks else [])
+    has_high_severity = any(
+        c.get("status") == "FLAG" and c.get("values", {}).get("severity") == "HIGH"
+        for c in check_list
+    )
+    excerpts, chunk_ids = _excerpt_block(chunks)
+    regulation_context, regulation_ids = _regulation_block(regs)
     return ProjectEvidence(
         project_id=str(project_id),
         sub_district=proj.sub_district,
         project_name=proj.name_th,
         fiscal_year=proj.fiscal_year,
         budget_total=_amount(proj.budget_total),
-        budget_lines=_budget_block(proj, bids, checks),
-        document_excerpts=_excerpt_block(chunks),
-        regulation_context=_regulation_block(regs),
+        budget_lines=_budget_block(proj, bids, check_list),
+        document_excerpts=excerpts,
+        regulation_context=regulation_context,
+        excerpt_chunk_ids=chunk_ids,
+        regulation_ids=regulation_ids,
+        has_high_severity_precheck=has_high_severity,
     )

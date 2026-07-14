@@ -1,9 +1,9 @@
-"""score_project end-to-end against a stub model (no LANTA).
+"""score_project end-to-end against a stub model (no LANTA), per-factor (v2).
 
-Exercises the real write path: stub guided-JSON → guardrails stage →
-risk_results, plus the bounded re-ask. DB-backed; skips if the stack is down or
-the regulation index is not ingested. Rows cascade away with the project_id
-fixture.
+Exercises the real write path: per-factor guided-JSON → citation/regulation
+filtering → deterministic aggregation → guardrails stage → risk_results, plus
+the per-factor re-ask. DB-backed; skips if the stack is down or the regulation
+index is not ingested. Rows cascade away with the project_id fixture.
 """
 
 import json
@@ -30,7 +30,6 @@ def _needs_regulation(engine):
 
 @pytest.fixture()
 def citable_chunk(engine, project_id):
-    """A real chunk under the throwaway project, so citations resolve."""
     with engine.begin() as conn:
         doc_id = conn.execute(
             text(
@@ -54,29 +53,20 @@ def citable_chunk(engine, project_id):
     return str(chunk_id)
 
 
-def _assessment(chunk_id: str, *, weight: float = 1.0) -> dict:
+def _factor(chunk_id: str, score: float = 50.0, extra_citations: list | None = None) -> dict:
     return {
-        "risk_level": "MEDIUM",
-        "overall_score": 45.0,
-        "summary_th": "พบข้อสังเกตที่ควรตรวจสอบเพิ่มเติม ผู้ตรวจสอบเป็นผู้วินิจฉัยขั้นสุดท้าย",
-        "factors": [
+        "score": score,
+        "rationale_th": "งบประมาณอยู่ในเกณฑ์ที่ควรตรวจสอบเพิ่มเติมตามหลักฐาน",
+        "reasoning_steps": [
             {
-                "factor_type": "BUDGET_DEVIATION",
-                "score": 45.0,
-                "weight": weight,
-                "rationale_th": "งบประมาณอยู่ในเกณฑ์ที่ควรตรวจสอบเพิ่มเติมตามหลักฐาน",
-                "reasoning_steps": [
-                    {
-                        "step_type": "EVIDENCE",
-                        "text_th": "ตรวจสอบข้อความในสัญญา",
-                        "citations": [{"chunk_id": chunk_id}],
-                    },
-                    {"step_type": "OBSERVATION", "text_th": "พบราคาที่ควรพิจารณาเทียบเคียง"},
-                    {"step_type": "INTERPRETATION", "text_th": "อาจต้องตรวจสอบความเหมาะสมเพิ่มเติม"},
-                ],
+                "step_type": "EVIDENCE",
+                "text_th": "ตรวจสอบข้อความในสัญญา",
                 "citations": [{"chunk_id": chunk_id}],
-            }
+            },
+            {"step_type": "OBSERVATION", "text_th": "พบราคาที่ควรพิจารณาเทียบเคียง"},
+            {"step_type": "INTERPRETATION", "text_th": "อาจต้องตรวจสอบความเหมาะสมเพิ่มเติม"},
         ],
+        "citations": [{"chunk_id": chunk_id}, *(extra_citations or [])],
         "regulation_references": [
             {
                 "regulation_id": S37,
@@ -88,7 +78,7 @@ def _assessment(chunk_id: str, *, weight: float = 1.0) -> dict:
     }
 
 
-def _evidence(project_id: str, chunk_id: str) -> ProjectEvidence:
+def _evidence(project_id: str, chunk_id: str, *, high_severity: bool = False) -> ProjectEvidence:
     return ProjectEvidence(
         project_id=project_id,
         sub_district="ตำบลทดสอบ",
@@ -98,61 +88,87 @@ def _evidence(project_id: str, chunk_id: str) -> ProjectEvidence:
         budget_lines="- ราคากลาง: 900,000.00 บาท",
         document_excerpts=f"[chunk_id: {chunk_id}] (เอกสาร: contract_summary)\nข้อความ",
         regulation_context=f"[regulation_id: {S37}] พ.ร.บ. วินัยการเงินการคลัง มาตรา 37",
+        excerpt_chunk_ids=[chunk_id],
+        regulation_ids=[S37],
+        has_high_severity_precheck=high_severity,
     )
 
 
-def test_valid_assessment_written_through_guardrails(engine, project_id, citable_chunk):
-    bundle = load_risk_scoring("v1")
+def test_five_factors_aggregate_and_write(engine, project_id, citable_chunk):
+    bundle = load_risk_scoring("v2")
     ev = _evidence(project_id, citable_chunk)
-    assessment = _assessment(citable_chunk)
+    calls = {"n": 0}
 
-    result = score_project(engine, lambda _m: json.dumps(assessment), bundle, ev, "mock/test")
+    def assess(_messages):
+        calls["n"] += 1
+        return json.dumps(_factor(citable_chunk, score=50.0))
 
-    assert result == "scored"
+    assert score_project(engine, assess, bundle, ev, "mock/test") == "scored"
+    assert calls["n"] == 5  # one call per factor
     with engine.connect() as conn:
         row = conn.execute(
             text(
-                "SELECT risk_level, overall_score, model_id, prompt_version "
+                "SELECT risk_level, overall_score, jsonb_array_length(result->'factors') n "
                 "FROM risk_results WHERE project_id = :p"
             ),
             {"p": project_id},
         ).one()
-    assert row.risk_level == "MEDIUM"
-    assert float(row.overall_score) == 45.0
-    assert row.model_id == "mock/test"
-    assert row.prompt_version == "risk_scoring/v1"
+    assert row.n == 5
+    assert float(row.overall_score) == 50.0  # weighted mean of equal-weight 50s
+    assert row.risk_level == "MEDIUM"  # 30 <= 50 < 55
 
 
-def test_bounded_reask_recovers_from_a_rejected_first_answer(engine, project_id, citable_chunk):
-    bundle = load_risk_scoring("v1")
+def test_high_severity_precheck_forces_requires_investigation(engine, project_id, citable_chunk):
+    bundle = load_risk_scoring("v2")
+    ev = _evidence(project_id, citable_chunk, high_severity=True)
+    # low factor scores, but a HIGH-severity pre-check overrides the band
+    assert score_project(engine, assess=lambda _m: json.dumps(_factor(citable_chunk, 10.0)),
+                         bundle=bundle, ev=ev, model_id="mock/test") == "scored"
+    with engine.connect() as conn:
+        level = conn.execute(
+            text("SELECT risk_level FROM risk_results WHERE project_id = :p"), {"p": project_id}
+        ).scalar()
+    assert level == "REQUIRES_INVESTIGATION"
+
+
+def test_per_factor_reask_recovers(engine, project_id, citable_chunk):
+    bundle = load_risk_scoring("v2")
     ev = _evidence(project_id, citable_chunk)
-    # first answer violates the weight-sum rule (schema); second is valid
-    answers = [
-        json.dumps(_assessment(citable_chunk, weight=0.4)),
-        json.dumps(_assessment(citable_chunk)),
-    ]
-    calls: list[list[dict]] = []
+    calls = {"n": 0}
 
-    def assess(messages):
-        calls.append(messages)
-        return answers.pop(0)
+    def assess(_messages):
+        calls["n"] += 1
+        if calls["n"] == 1:  # first factor's first attempt is unparseable
+            return "{ not valid json"
+        return json.dumps(_factor(citable_chunk))
 
-    result = score_project(engine, assess, bundle, ev, "mock/test")
-
-    assert result == "scored"
-    assert len(calls) == 2  # one re-ask
-    # the re-ask carried the violation feedback forward
-    assert any("ไม่ผ่านการตรวจสอบ" in m["content"] for m in calls[1])
+    assert score_project(engine, assess, bundle, ev, "mock/test") == "scored"
+    assert calls["n"] == 6  # 5 factors + 1 re-ask
 
 
-def test_unrecoverable_answer_is_rejected_not_written(engine, project_id, citable_chunk):
-    bundle = load_risk_scoring("v1")
+def test_hallucinated_citation_is_filtered_not_rejected(engine, project_id, citable_chunk):
+    bundle = load_risk_scoring("v2")
     ev = _evidence(project_id, citable_chunk)
-    bad = json.dumps(_assessment(citable_chunk, weight=0.4))  # always invalid
+    fake = "00000000-0000-0000-0000-000000000000"
 
-    result = score_project(engine, lambda _m: bad, bundle, ev, "mock/test")
+    def assess(_messages):
+        return json.dumps(_factor(citable_chunk, extra_citations=[{"chunk_id": fake}]))
 
-    assert result == "rejected"
+    # the fake citation is dropped before guardrails, so the write still succeeds
+    assert score_project(engine, assess, bundle, ev, "mock/test") == "scored"
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT result::text FROM risk_results WHERE project_id = :p"), {"p": project_id}
+        ).scalar()
+    assert fake not in result
+    assert citable_chunk in result
+
+
+def test_all_factors_unparseable_is_rejected(engine, project_id, citable_chunk):
+    bundle = load_risk_scoring("v2")
+    ev = _evidence(project_id, citable_chunk)
+
+    assert score_project(engine, lambda _m: "not json", bundle, ev, "mock/test") == "rejected"
     with engine.connect() as conn:
         count = conn.execute(
             text("SELECT count(*) FROM risk_results WHERE project_id = :p"), {"p": project_id}

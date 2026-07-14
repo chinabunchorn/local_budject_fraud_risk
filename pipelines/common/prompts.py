@@ -27,7 +27,8 @@ USER_TEMPLATE_FIELDS = frozenset(
         "budget_lines",
         "document_excerpts",
         "regulation_context",
-        "factor_definitions",
+        "factor_definitions",  # v1: all factors in one call
+        "factor_definition",  # v2: one factor per call (per-factor scoring)
     }
 )
 
@@ -87,6 +88,37 @@ def build_messages(
         document_excerpts=document_excerpts,
         regulation_context=regulation_context,
         factor_definitions="\n\n".join(bundle.factors[ft] for ft in RiskFactorType),
+    )
+    return [
+        {"role": "system", "content": bundle.system},
+        {"role": "user", "content": user},
+    ]
+
+
+def build_factor_messages(
+    bundle: PromptBundle,
+    factor_type: RiskFactorType,
+    *,
+    sub_district: str,
+    project_name: str,
+    fiscal_year: int,
+    budget_total: str,
+    budget_lines: str,
+    document_excerpts: str,
+    regulation_context: str,
+) -> list[dict[str, str]]:
+    """Per-factor messages (v2): the same evidence with ONE factor definition,
+    so a full reasoning chain fits the 8192-token window. `guided_json` is bound
+    by the caller to `schemas.FactorAssessment`; temperature 0."""
+    user = bundle.user_template.format(
+        sub_district=sub_district,
+        project_name=project_name,
+        fiscal_year=fiscal_year,
+        budget_total=budget_total,
+        budget_lines=budget_lines,
+        document_excerpts=document_excerpts,
+        regulation_context=regulation_context,
+        factor_definition=bundle.factors[factor_type],
     )
     return [
         {"role": "system", "content": bundle.system},

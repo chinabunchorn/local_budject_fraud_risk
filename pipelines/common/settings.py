@@ -43,8 +43,19 @@ def vllm_base_url() -> str:
     return os.environ.get("VLLM_BASE_URL", "http://127.0.0.1:8000/v1")
 
 
-def vllm_model() -> str:
-    return os.environ.get("VLLM_CHAT_MODEL", "scb10x/typhoon2.5-qwen3-30b-a3b")
+def vllm_model_id() -> str:
+    """Provenance recorded in risk_results.model_id and Langfuse — the real
+    model, independent of whatever alias the server is started under."""
+    return os.environ.get("VLLM_MODEL_ID") or os.environ.get(
+        "VLLM_CHAT_MODEL", "scb10x/typhoon2.5-qwen3-30b-a3b"
+    )
+
+
+def vllm_served_model() -> str:
+    """The OpenAI `model` field for requests — MUST equal the server's
+    --served-model-name (e.g. an alias like 'typhoon-chat'), else vLLM 404s.
+    Defaults to the provenance id when no alias override is set."""
+    return os.environ.get("VLLM_SERVED_MODEL") or vllm_model_id()
 
 
 def langfuse_config() -> dict[str, str] | None:

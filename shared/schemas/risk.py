@@ -107,6 +107,25 @@ class RiskFactor(BaseModel):
     citations: list[Citation] = Field(default_factory=list)
 
 
+class FactorAssessment(BaseModel):
+    """One factor as the model emits it under `guided_json` in per-factor
+    scoring (prompts risk_scoring/v2): the 8192-token window cannot hold all
+    five factors' reasoning in a single call, so each factor is scored on its
+    own. `factor_type` and `weight` are assigned deterministically by the
+    pipeline (not the model) and combined into a `RiskFactor`; the top-level
+    `overall_score` / `risk_level` / `summary_th` are computed by deterministic
+    aggregation. Regulation references are collected and de-duplicated across
+    factors into the `RiskAssessment`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    score: Score
+    rationale_th: str = Field(min_length=1)
+    reasoning_steps: list[ReasoningStep] = Field(min_length=1)
+    citations: list[Citation] = Field(default_factory=list)
+    regulation_references: list[RegulationReference] = Field(default_factory=list)
+
+
 class RiskAssessment(BaseModel):
     """Exactly what the model emits under `guided_json` at temperature 0."""
 

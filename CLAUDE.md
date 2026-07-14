@@ -176,19 +176,27 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
    919k→7.79M spike, ส. พงษ์พัฒนา won 2 yrs / ฿3.571M). `severity` stays inside the check —
    the {LOW,MEDIUM,HIGH,REQUIRES_INVESTIGATION} risk *verdict* enum remains reserved for the
    guardrails-validated Phase-G LLM path.
-7. BUILT (Phase G), real run pending a LANTA window — score_risk flow
-   (`flows/score_risk.py` + `common/{vllm,observability,scoring_evidence}.py`, 7 tests).
-   Per project: `assemble_evidence` builds the v1 prompt context from committed data only —
-   the Phase-F financial facts + all 8 `precheck_results` findings (the model reasons over the
-   settled arithmetic, never recomputes), real `chunk_id`-labelled document excerpts (so
-   `Citation`s resolve), and the exact regulation sections the factor templates cite. Then
-   `VLLMClient` calls the tunnel endpoint (`VLLM_BASE_URL`, OpenAI-compatible, `guided_json`
-   bound to `RiskAssessment` via XGrammar, temp 0), Langfuse-traced (the `<think>` trace goes
-   to Langfuse ONLY), → the guardrails stage (the sole write path into `risk_results`), with a
-   bounded 1× re-ask that feeds the violation list back. Verified end-to-end against a stub on
-   the real corpus (evidence → guardrails → risk_results write passes schema/regulation/
-   lexicon/citation checks; mock verdict cleaned up). **Execution decisions:** live tunnel
-   (roadmap step 7), not offline batch; the `assess` callable is injectable so the offline
-   path can be added later. **The real Typhoon scoring run is an attended runbook step** —
-   2FA blocks unattended tunnel bring-up (same as prior LANTA phases).
-   Then the Typhoon-vs-Qwen3-32B eval decision point.
+7. BUILT (Phase G), full batch pending a stable LANTA window — score_risk flow
+   (`flows/score_risk.py` + `common/{vllm,observability,scoring_evidence,aggregation}.py`,
+   16 tests). Per project: `assemble_evidence` builds prompt context from committed data only
+   — Phase-F financial facts + all 8 `precheck_results` findings (the model reasons over the
+   settled arithmetic, never recomputes), real `chunk_id`-labelled excerpts (diverse doc_types
+   so `Citation`s resolve), and the cited regulation sections. **PER-FACTOR scoring (prompts
+   risk_scoring/v2), forced by the fixed 8192 window:** a full 5-factor `RiskAssessment` output
+   is ~3.8k tokens and, with the ~2.5k-token factor definitions, cannot fit meaningful evidence
+   in one call (measured live — it truncated). So each factor is scored in its own call
+   (`guided_json` → `FactorAssessment`, temp 0, tunnel, Langfuse-traced), then DETERMINISTIC
+   aggregation (`common/aggregation.py`) combines them: weighted `overall_score` (equal weights
+   until calibration), banded `risk_level` with a HIGH-severity pre-check forcing
+   REQUIRES_INVESTIGATION (verdict is code, not the LLM's free choice), templated non-accusatory
+   `summary_th`. Model citations/regulation refs are filtered to what was actually offered
+   (hallucinations dropped, not rejected) → guardrails stage (sole write path). Verified against
+   a stub end-to-end + live per-factor calls (parse, token budget ~5.1k+0.8k/8192, citations).
+   **Live serving realities (verified, differ from repo assumptions):** the container is vLLM
+   **0.9.2** (not 0.11.0); served alias is `typhoon-chat` (decoupled from provenance `model_id`
+   `scb10x/…` via `/v1/models` root); request-level `guided_decoding_backend` is rejected (400)
+   and there is no per-request whitespace control, so guided decoding intermittently
+   whitespace-loops and truncates — mitigated by `max_tokens` + a fresh per-factor retry
+   (temp 0 is non-deterministic under TP2). The plain-`ssh -N` tunnel drops under load, so the
+   flow is **resumable** (skips already-scored projects; stops cleanly on tunnel death; re-run
+   continues). Then the Typhoon-vs-Qwen3-32B eval decision point.

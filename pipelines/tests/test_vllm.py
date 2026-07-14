@@ -42,7 +42,8 @@ def test_generate_json_binds_schema_temperature_and_returns_content():
     assert captured["path"].endswith("/chat/completions")
     body = captured["body"]
     assert body["guided_json"] == schema
-    assert body["guided_decoding_backend"] == "xgrammar"
+    # recent vLLM 400s on a request-level backend override — must not be sent
+    assert "guided_decoding_backend" not in body
     assert body["temperature"] == 0.0
     assert body["model"] == "typhoon-test"
     assert body["messages"] == messages
