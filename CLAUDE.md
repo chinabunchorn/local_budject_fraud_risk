@@ -231,4 +231,20 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
    corpus/venvs out of the context) — healthy in-stack, Redis caching confirmed there.
    Gotcha: the Traefik docker provider is dead on the dev Mac (label routes 404 —
    pre-existing, Langfuse's route too); use published port :8080 locally, validate
-   Traefik routing on the amd64 app VM. Next: Workstream B (Next.js dashboard).
+   Traefik routing on the amd64 app VM.
+2. DONE (Workstream B) — Next.js dashboard (`frontend/`, Next 15 pinned — create-next-app
+   now defaults to 16 — port 3001; Langfuse holds 3000), verified end-to-end against the
+   real corpus with headless system Chrome (login → overview → drill-down → citation
+   dialog → trends, zero console errors; screenshots reviewed). Formal executive UI per
+   design brief: white surfaces, corporate-blue accents, Sarabun, hairline borders, no
+   decorative animation. Dataviz method applied (palette validated on white via
+   validate_palette.js): KPI tiles + status-colored risk distribution (labels always
+   beside color) + sequential-blue heatmap; drill-down shows the validated RiskResult
+   verbatim — per-factor reasoning chains (หลักฐาน→ข้อสังเกต→การตีความ chips) with
+   citation dialogs resolving chunk text, regulation viewer, 8 prechecks, bids,
+   feedback capture; trends = 2-series line (fixed categorical slots) + single-hue
+   contractor bars; every chart has a table-view twin + tooltips; persistent
+   disclaimer strip on every view. Auth: JWT in localStorage, 401 → /login.
+   Known polish item: Phase-F precheck `detail` strings are half-English (pipeline
+   data, not UI) — Thai-ify in pipelines later. Next: Workstream C (demo-story dry
+   run + offline exit-gate drill), then Phase 4 (chatbot).
