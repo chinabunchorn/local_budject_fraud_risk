@@ -209,4 +209,26 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
    `max_tokens` for fast-fail + up to 5 fresh per-factor retries — yielded 98/100 factor calls
    valid on the real run. The plain-`ssh -N` tunnel drops under load, so the flow is
    **resumable** (client retries transient drops; skips already-scored projects; stops cleanly
-   on tunnel death; re-run continues). Then the Typhoon-vs-Qwen3-32B eval decision point.
+   on tunnel death; re-run continues). **Model decision (July 2026): Typhoon 2.5
+   confirmed as the sole LLM** — the Phase-2 eval decision point is closed; Qwen3-32B
+   AWQ stays unstaged.
+
+**Phase 3 progress (July 2026):**
+1. DONE (Workstream A) — FastAPI read layer over the pre-computed data, verified live
+   against the real corpus (20 projects served; distribution 15 MEDIUM / 4 REQ_INV /
+   1 LOW matches Phase G; วัดไทร drill-down, citation→contract_summary.pdf passage,
+   มาตรา ๓๗ text, and trend spikes incl. ตำบลหัวเขา +852.7% FY2568 all resolve).
+   Migration 0005 `users` (bcrypt + JWT, roles ADMIN/SENIOR_AUDITOR/AUDITOR;
+   `backend/scripts/seed_users.py`). Routers: auth; dashboard overview+trends
+   (SQL window functions only, best-effort Redis cache that silently degrades to DB —
+   offline-first); projects list (severity-first sort, filters) + drill-down serving
+   the guardrails-validated `RiskResult` verbatim via the shared contract, plus bids,
+   all 8 precheck findings, documents; feedback capture (sentiment stays NULL for the
+   batch flow); `/chunks/{id}` + `/regulations/{code}` citation resolution. Every
+   risk-bearing response carries `disclaimer_th` (auditor decides). 19 tests
+   (house convention: throwaway rows on live PG, skip when down). Compose `backend`
+   service (Dockerfile builds from repo root for ../shared; root `.dockerignore` keeps
+   corpus/venvs out of the context) — healthy in-stack, Redis caching confirmed there.
+   Gotcha: the Traefik docker provider is dead on the dev Mac (label routes 404 —
+   pre-existing, Langfuse's route too); use published port :8080 locally, validate
+   Traefik routing on the amd64 app VM. Next: Workstream B (Next.js dashboard).
