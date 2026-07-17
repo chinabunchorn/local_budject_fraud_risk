@@ -380,8 +380,14 @@ export default function ProjectDetailPage() {
                 labelTh: c.status,
                 color: null,
               };
+              // Pipeline convention: severity + Thai justification live in `values`
+              const severity = (c.values?.severity ?? c.severity) as string | undefined;
+              const detailTh =
+                typeof c.values?.justification === "string"
+                  ? c.values.justification
+                  : c.detail;
               const color =
-                c.status === "FLAG" && c.severity === "HIGH"
+                c.status === "FLAG" && severity === "HIGH"
                   ? viz.status.critical
                   : status.color;
               return (
@@ -397,11 +403,11 @@ export default function ProjectDetailPage() {
                         aria-hidden
                       />
                       {status.labelTh}
-                      {c.status === "FLAG" && c.severity === "HIGH" ? " (สูง)" : ""}
+                      {c.status === "FLAG" && severity === "HIGH" ? " (สูง)" : ""}
                     </span>
                   </td>
                   <td className="px-6 py-3 leading-relaxed text-muted-foreground">
-                    {c.detail}
+                    {detailTh}
                   </td>
                 </tr>
               );

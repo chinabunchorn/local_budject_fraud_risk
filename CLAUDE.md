@@ -246,5 +246,22 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
    contractor bars; every chart has a table-view twin + tooltips; persistent
    disclaimer strip on every view. Auth: JWT in localStorage, 401 → /login.
    Known polish item: Phase-F precheck `detail` strings are half-English (pipeline
-   data, not UI) — Thai-ify in pipelines later. Next: Workstream C (demo-story dry
-   run + offline exit-gate drill), then Phase 4 (chatbot).
+   data, not UI) — largely mitigated in Workstream C (UI prefers `values.justification`,
+   which is Thai, for the findings that matter); remaining English details are the
+   simple cross-check rows.
+3. DONE (Workstream C) — **Phase 3 exit gate MET** (2026-07-17): with the tunnel down
+   (0 listeners on :8000, no ssh -N) a scripted headless-Chrome tour (login → overview
+   → projects → star drill-down → regulation dialog → citation dialog → feedback post
+   → trends) passed 17/17 assertions incl. zero requests to the inference port and
+   zero console errors — the dashboard is fully functional with LANTA offline.
+   Demo-story dry run: star project = วัดไทร **FY2568** (฿7.794M,
+   id dcaf3f14-…); its page carries the whole narrative — yoy precheck FLAG(สูง) with
+   Thai justification (748% spike 2567→2568, ส. พงษ์พัฒนา won 2 yrs, ฿3.571M
+   cumulative), model reasoning citing the same facts, มาตรา ๓๗ link,
+   REQUIRES_INVESTIGATION verdict; trends corroborate (หัวเขา +852.7% FY2568).
+   Fix found by the drill: severity/justification live in precheck `values` (pipeline
+   convention) — detail page now reads `values.severity` for the (สูง) marker and
+   prefers the Thai `values.justification` over the English `detail`. Runbook:
+   `docs/runbooks/demo_dashboard.md` (bring-up, 5-min demo script, drill procedure +
+   recorded result, open pseudonymization decision). Phase 3 COMPLETE → Phase 4
+   (live RAG chatbot through the tunnel).
