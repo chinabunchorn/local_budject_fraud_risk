@@ -146,6 +146,22 @@ class StandardPrice(Base):
     created_at: Mapped[datetime]
 
 
+class BudgetReportSummary(Base):
+    """Per-year budget total summed from a sub-district budget report
+    (migration 0007). Deterministic; `document_id` cites the source report."""
+
+    __tablename__ = "budget_report_summaries"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    sub_district_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sub_districts.id"))
+    fiscal_year: Mapped[int]
+    document_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("documents.id"))
+    total_budget: Mapped[Decimal]
+    project_count: Mapped[int]
+    top_items: Mapped[list[Any]] = mapped_column(JSONB)
+    extracted_at: Mapped[datetime]
+
+
 class Regulation(Base):
     __tablename__ = "regulations"
 

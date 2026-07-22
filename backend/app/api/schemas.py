@@ -306,3 +306,32 @@ class BudgetItemGroup(BaseModel):
 class BudgetItemsResponse(BaseModel):
     items: list[BudgetItemGroup]
     disclaimer_th: str = DISCLAIMER_TH
+
+
+# ---- budget-report trends (ภาพรวม budget-by-year chart) -------------------------
+
+
+class BudgetTopItem(BaseModel):
+    description_th: str
+    amount: float
+
+
+class BudgetReportYear(BaseModel):
+    fiscal_year: int
+    total_budget: float
+    project_count: int
+    budget_yoy_pct: float | None
+    top_items: list[BudgetTopItem]
+    document_id: UUID | None
+    document_filename: str | None
+
+
+class BudgetReportGroup(BaseModel):
+    sub_district_id: UUID
+    sub_district_name_th: str
+    years: list[BudgetReportYear]
+
+
+class BudgetReportTrendsResponse(BaseModel):
+    items: list[BudgetReportGroup]
+    disclaimer_th: str = DISCLAIMER_TH

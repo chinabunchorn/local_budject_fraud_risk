@@ -123,19 +123,18 @@ mission3/
 
 ## Current status & next tasks (see docs/ROADMAP.md — Phases 0–3 DONE incl. exit gates; next: Phase 4 live RAG chatbot)
 
-**Where we are (2026-07-22):** Phase 2 (ingestion + structured extraction + real
-Typhoon-2.5 risk scoring, 22 projects) and Phase 3 (offline-first dashboard: FastAPI
-read API + Next.js UI, exit gate met with LANTA fully offline) are COMPLETE, plus two
-post-Phase-3 rounds driven by mentor feedback: the evidence-first citation viewer
-(inline excerpts → real source PDFs opened at the cited page, every project guaranteed
-a PDF entry point) and item-level anomaly detection (`/budget-items` — unit-price YoY
-spikes, vendor locks, curated standard-price comparison; MVP: the หัวเขา 2,000L water
-tanks, +51.1%/unit, same single-bidder shop 2 years). Everything user-facing reads
-pre-computed, document-cited data — no LLM call anywhere in the dashboard path.
+**Where we are (2026-07-23):** Phase 2 (ingestion + structured extraction + real
+Typhoon-2.5 risk scoring, **22/22 projects scored**) and Phase 3 (offline-first
+dashboard: FastAPI read API + Next.js UI, exit gate met with LANTA fully offline) are
+COMPLETE, plus two post-Phase-3 rounds driven by mentor feedback: the evidence-first
+citation viewer (inline excerpts → real source PDFs opened at the cited page, every
+project guaranteed a PDF entry point) and item-level anomaly detection (`/budget-items`
+— unit-price YoY spikes, vendor locks, curated standard-price comparison; MVP: the
+หัวเขา 2,000L water tanks, +51.1%/unit, same single-bidder shop 2 years). Everything
+user-facing reads pre-computed, document-cited data — no LLM call anywhere in the
+dashboard path.
 **Next:** Phase 4 (LangGraph RAG chatbot through the tunnel, needs a LANTA demo
-window) + re-run `score_risk` at that window so the 2 new tank projects get their
-guardrails-validated risk results (flow resumes over unscored projects). Details of
-every phase below.
+window). Details of every phase below.
 
 **Done (July 2026).** Repo scaffolded and merged (PR #2); app-zone `docker-compose` verified
 healthy end-to-end (all 9 services, Thai embedding + rerank probes pass); `shared/schemas`
@@ -369,3 +368,24 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
    tank projects have **no Phase-G risk result yet** (needs a LANTA window; score_risk
    skips already-scored projects, so a plain re-run picks them up) — their pages
    honestly show ยังไม่ผ่านการวิเคราะห์ while all item findings are already visible.
+6. DONE (LANTA backfill, 2026-07-23, attended 2FA window) — closed the two loose ends
+   from item 5. **Scoring:** re-ran `score_risk` over the tunnel → `{'scored': 2,
+   'rejected': 0, 'skipped': 20}`; both tanks now scored under the same provenance as
+   the other 20 (`scb10x/typhoon2.5-qwen3-30b-a3b`, `risk_scoring/v2`), both
+   REQUIRES_INVESTIGATION (FY67 30, FY68 35 — their HIGH-severity item findings force
+   the verdict up in aggregation). **Portfolio is now 22/22 scored**, distribution
+   15 MEDIUM / 6 REQUIRES_INVESTIGATION / 1 LOW. Their drill-downs now render the
+   verdict + factor chart instead of "ยังไม่ผ่านการวิเคราะห์". Gotcha confirmed live:
+   request `model` field must be the served alias `typhoon-chat` (`VLLM_SERVED_MODEL`),
+   while `model_id` provenance stays the HF id — the settings split in
+   `common/settings.py` (`vllm_served_model` vs `vllm_model_id`) is what keeps the
+   resumable-skip consistent. **OCR:** ran the attended OCR batch for the one
+   standard-price reference `ราคามาตรฐานครุภัณฑ์.pdf` (doc `b10dfe87`, 2-page scan) →
+   ingest pass 2 flipped it `NEEDS_OCR → COMPLETED` (4 chunks). The OCR **confirms the
+   curated ฿7,000** — page 2 reads `10.10.2 แบบพลาสติก ขนาดความจุ 2,000 ลิตร → 7,000`,
+   so the `/budget-items` citation now opens a searchable text-layer doc. `provenance`
+   stays **CURATED** (honest: a person entered it; OCR corroborates) — flipping to
+   EXTRACTED still needs a standard-price-table parser (deferred). The other 10 large
+   เอกสารกลาง books remain NEEDS_OCR by standing decision. Runbook for both tracks:
+   `~/.claude/plans/nested-baking-wombat.md`. **Both Phase-3 loose ends are closed;
+   the only remaining forward work is Phase 4.**

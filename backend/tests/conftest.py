@@ -81,6 +81,30 @@ def seeded_items(engine, seeded):
 
 
 @pytest.fixture()
+def seeded_budget_reports(engine, seeded):
+    """Two years of budget_report_summaries on the throwaway sub-district
+    (1.0M -> 1.5M, +50% YoY; 10 -> 12 projects)."""
+    with engine.begin() as conn:
+        for fy, total, count in [(2566, 1_000_000, 10), (2567, 1_500_000, 12)]:
+            conn.execute(
+                text(
+                    "INSERT INTO budget_report_summaries (sub_district_id, fiscal_year, "
+                    "document_id, total_budget, project_count, top_items) "
+                    "VALUES (:sd, :fy, :doc, :total, :count, CAST(:top AS jsonb)) "
+                    "ON CONFLICT (sub_district_id, fiscal_year) DO UPDATE SET "
+                    "total_budget = EXCLUDED.total_budget, top_items = EXCLUDED.top_items"
+                ),
+                {"sd": seeded["sub_district"], "fy": fy, "doc": seeded["document"],
+                 "total": total, "count": count,
+                 "top": '[{"description_th": "โครงการเบี้ยยังชีพผู้สูงอายุ", "amount": "500000"}, '
+                        '{"description_th": "โครงการก่อสร้างถนนทดสอบ", "amount": "300000"}, '
+                        '{"description_th": "โครงการเล็กทดสอบ", "amount": "100000"}]'},
+            )
+    yield seeded
+    # rows cascade away with the seeded sub-district
+
+
+@pytest.fixture()
 def document_with_file(engine):
     """A throwaway document row whose minio_key points at a real tiny PDF
     uploaded to the corpus bucket — exercises the actual MinIO round trip the
