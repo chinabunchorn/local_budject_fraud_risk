@@ -44,11 +44,37 @@ def test_parses_thai_digits():
     assert s.total_budget == Decimal("22500")
 
 
-def test_skips_non_numeric_and_zero():
+def test_trailing_funding_note_in_amount_cell():
+    """Regression: งบกลาง-funded projects carry a funding note after the number
+    in the amount cell — the number must still be captured (the original bug
+    that undercounted Hua Khao FY66 by ฿9,698,000)."""
     chunk = (
-        "| 1 | โครงการมีงบ | 50,000 | x |\n"
-        "| 2 | โครงการงบผู้บริหาร | งบประมาณของผู้บริหาร | x |\n"
-        "| 3 | โครงการศูนย์ | 0 | x |"
+        "| 13 | โครงการก่อสร้างถนน ค.ส.ล. คลอง 6 ซ มอ. ยาว 2,900 เมตร | 7,248,000 งบกลาง 2566 | x |\n"
+        "| 14 | โครงการปกติ | 500,000 | x |"
+    )
+    s = sum_budget_report([chunk])
+    assert s.project_count == 2
+    assert s.total_budget == Decimal("7748000")
+
+
+def test_zero_budget_projects_counted_with_zero_amount():
+    """Dash / non-numeric amount = a project the document counts but with no
+    allocated budget: counted toward project_count, ฿0 to the total."""
+    chunk = (
+        "| 1 | โครงการมีงบประมาณจริง | 50,000 | x |\n"
+        "| 2 | โครงการงบผู้บริหารสนับสนุน | งบประมาณของผู้บริหาร | x |\n"
+        "| 3 | โครงการไม่มีงบจัดสรร | - | x |"
+    )
+    s = sum_budget_report([chunk])
+    assert s.project_count == 3
+    assert s.total_budget == Decimal("50000")
+
+
+def test_skips_header_and_section_rows():
+    chunk = (
+        "| 1 | โครงการจริงมีงบ | 50,000 | x |\n"
+        "| 2 | ส่วนที่ 1 | ข้อมูล | x |\n"          # section leader → skipped
+        "| 3 |  | 100 | x |"                          # empty desc → skipped
     )
     s = sum_budget_report([chunk])
     assert s.project_count == 1
