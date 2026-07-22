@@ -262,6 +262,16 @@ export default function ProjectDetailPage() {
     setViewerOpen(true);
   }
 
+  /** Opens a project document directly (no citation behind it — used by the
+   * "เอกสารประกอบ" list, which every project has even when the model didn't
+   * cite anything). Starts at page 1: there's no cited page to jump to. */
+  function openDocumentById(documentId: string, filename: string) {
+    setViewerDocId(documentId);
+    setViewerFilename(filename);
+    setViewerPage(null);
+    setViewerOpen(true);
+  }
+
   async function openRegulation(code: string) {
     setRegulation(null);
     setRegOpen(true);
@@ -507,7 +517,32 @@ export default function ProjectDetailPage() {
                       ))}
                     </div>
                   </div>
-                ) : null}
+                ) : (
+                  // The guardrails stage drops any citation the model offered
+                  // that didn't resolve to a real chunk — some factors end up
+                  // with none. Rather than show nothing, point straight at
+                  // the project's real documents so there's always a PDF to
+                  // check the reasoning against.
+                  <div className="mt-4 border-t border-border pt-4">
+                    <p className="text-xs text-muted-foreground">
+                      แบบจำลองไม่ได้อ้างอิงเอกสารเฉพาะสำหรับปัจจัยนี้ —
+                      ตรวจสอบกับเอกสารประกอบโครงการโดยตรง:
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {data.documents.map((d) => (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => openDocumentById(d.id, d.filename)}
+                          className="inline-flex items-center gap-1.5 rounded border border-border bg-white px-2 py-1 text-xs text-primary hover:bg-accent"
+                        >
+                          <FileText className="size-3.5 shrink-0" aria-hidden />
+                          {d.filename}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -648,15 +683,27 @@ export default function ProjectDetailPage() {
             <h2 className="font-medium text-foreground">
               เอกสารประกอบ ({data.documents.length} ฉบับ)
             </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              เปิดดูไฟล์ต้นฉบับได้ทุกฉบับ แม้ในปัจจัยที่แบบจำลองไม่ได้อ้างอิงเอกสารเฉพาะ
+            </p>
           </div>
           <ul className="max-h-72 divide-y divide-border overflow-y-auto text-sm">
             {data.documents.map((d) => (
-              <li key={d.id} className="flex items-center justify-between px-6 py-2.5">
-                <span className="truncate pr-4">{d.filename}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {d.doc_type ?? d.scope}
-                  {d.page_count ? ` · ${d.page_count} หน้า` : ""}
-                </span>
+              <li key={d.id}>
+                <button
+                  type="button"
+                  onClick={() => openDocumentById(d.id, d.filename)}
+                  className="flex w-full items-center justify-between gap-3 px-6 py-2.5 text-left hover:bg-accent"
+                >
+                  <span className="inline-flex min-w-0 items-center gap-1.5 text-primary">
+                    <FileText className="size-3.5 shrink-0" aria-hidden />
+                    <span className="truncate">{d.filename}</span>
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {d.doc_type ?? d.scope}
+                    {d.page_count ? ` · ${d.page_count} หน้า` : ""}
+                  </span>
+                </button>
               </li>
             ))}
           </ul>
