@@ -319,3 +319,39 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
    Commits (branch `feat/phase3-dashboard`): `f5dc363` (inline evidence), `ddf17d7`
    (PDF viewer), `3a350f5` (dialog sizing), `fde8dac` (universal PDF entry point).
    22/22 backend tests, frontend build clean throughout.
+5. DONE (item-level anomaly detection, 2026-07-22) — end-to-end unit-price-spike +
+   vendor-lock tracking, MVP case: ตำบลหัวเขา 2,000L water tanks (FY67 5 ใบ ฿22,500 →
+   FY68 5 ใบ ฿34,000 = **+51.1%/unit, same shop ร้านวีระพร พลาสติก, single bidder both
+   years, เฉพาะเจาะจง**; standard ฿7,000/unit → 64.3%→97.1% of ceiling).
+   **Evidence chain is 100% documented, nothing invented:** totals/vendor from the two
+   born-digital contract summaries (new projects, ingested via the standard flow);
+   **quantities (จำนวน ๕ ใบ) from the budget reports** — FY67 รายงานงบ 67 p.12 (OCR'd)
+   and FY68 รายงานงบ68 p.10 (born-digital), both already-ingested docs; the ฿7,000
+   standard is a **CURATED row** (`pipelines/curated/standard_prices.yaml`, provenance
+   recorded, decision: the ราคามาตรฐานครุภัณฑ์ extract is a pure 2-page scan —
+   ingested as REFERENCE/NEEDS_OCR per the standing เอกสารกลาง deferral, and the
+   curated row cites it at p.2 so the auditor verifies the number in the PDF viewer).
+   Pieces: migration **0006** (`project_items` with DB-generated `unit_price` +
+   `standard_prices` with provenance CURATED|EXTRACTED); `common/item_extract.py`
+   (explicit TRACKED_ITEMS catalog, pipe-table row parsing both digit systems,
+   project matching by year+sub-district+exact amount+name pattern — ambiguity is
+   skipped, never guessed); `common/item_prechecks.py` (3 findings:
+   `unit_price_yoy_spike` ≥30% threshold w/ HIGH escalation on repeat vendor,
+   `item_vendor_lock`, `unit_price_vs_standard`; same non-accusatory contract as
+   prechecks.py) merged into `extract_structured`'s single idempotent run (item pass
+   seeds standards + upserts items + appends findings via the one precheck write
+   path; dedup guards against overlapping-chunk double counting — caught live:
+   cumulative ฿90,500 from a repeated FY68 line); backend `GET
+   /api/dashboard/budget-items` (SQL-window YoY, standards+citations, findings);
+   frontend `/budget-items` "สรุปการจัดซื้อ" page (KPI tiles, unit-price columns vs
+   dashed standard threshold line, findings list, per-year evidence table whose
+   source buttons open the actual PDFs at the cited pages). Bug fixed en route:
+   Content-Disposition with a Thai filename 500'd (headers are latin-1) → RFC 5987
+   `filename*=UTF-8''…` + ASCII fallback, regression-tested with a Thai filename.
+   Corpus layout note: the loose tank PDFs were moved into proper project folders
+   (`…/ปี 67 /ซื้อถังน้ำพลาสติก ขนาดความจุ ๒,๐๐๐ ลิตร/ข้อมูลสาระสำคัญในสัญญา.pdf`) so
+   walk_corpus classifies them (22 projects now). 13 new pipeline tests (130 total
+   pass), 23 backend tests, 17/17 + 7/7 live headless-Chrome checks. NOTE: the two
+   tank projects have **no Phase-G risk result yet** (needs a LANTA window; score_risk
+   skips already-scored projects, so a plain re-run picks them up) — their pages
+   honestly show ยังไม่ผ่านการวิเคราะห์ while all item findings are already visible.

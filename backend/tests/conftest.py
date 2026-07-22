@@ -33,12 +33,51 @@ def engine():
         with eng.connect() as conn:
             conn.execute(text("SELECT 1"))
             has_users = conn.execute(text("SELECT to_regclass('users')")).scalar()
+            has_items = conn.execute(text("SELECT to_regclass('project_items')")).scalar()
     except Exception:
         pytest.skip("PostgreSQL not reachable — start the compose stack and source .env")
-    if has_users is None:
-        pytest.skip("users table missing — run alembic upgrade head (migration 0005)")
+    if has_users is None or has_items is None:
+        pytest.skip("schema out of date — run alembic upgrade head (needs migration 0006)")
     yield eng
     eng.dispose()
+
+
+@pytest.fixture()
+def seeded_items(engine, seeded):
+    """Tracked-item rows + a curated standard price on the throwaway projects
+    (unit prices 4,500 → 6,800 vs standard 7,000 — mirrors the MVP case)."""
+    with engine.begin() as conn:
+        for pid, qty, total in [
+            (seeded["project_2566"], 5, 22500),
+            (seeded["project_2567"], 5, 34000),
+        ]:
+            conn.execute(
+                text(
+                    "INSERT INTO project_items (project_id, item_key, description_th, "
+                    "quantity, unit_th, total_amount, source_document_id, source_page, "
+                    "source_quote_th) VALUES (:p, 'test-tank-2000l', "
+                    "'จัดซื้อถังน้ำทดสอบ ขนาด 2,000 ลิตร จำนวน 5 ใบ', :q, 'ใบ', :t, :doc, 12, "
+                    "'จัดซื้อถังน้ำทดสอบ | 22,500') "
+                    "ON CONFLICT (project_id, item_key) DO UPDATE SET quantity = EXCLUDED.quantity"
+                ),
+                {"p": pid, "q": qty, "t": total, "doc": seeded["document"]},
+            )
+        conn.execute(
+            text(
+                "INSERT INTO standard_prices (item_key, description_th, "
+                "standard_unit_price, fiscal_year, source_document_id, source_page) "
+                "VALUES ('test-tank-2000l', 'ถังน้ำทดสอบ 2,000 ลิตร', 7000, 2568, :doc, 1) "
+                "ON CONFLICT (item_key) DO UPDATE SET "
+                "standard_unit_price = EXCLUDED.standard_unit_price"
+            ),
+            {"doc": seeded["document"]},
+        )
+
+    yield seeded
+
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM standard_prices WHERE item_key = 'test-tank-2000l'"))
+        # project_items cascade away with the seeded sub-district
 
 
 @pytest.fixture()
@@ -83,11 +122,13 @@ def document_with_file(engine):
             ),
             {"sd": sd_id},
         ).scalar_one()
+        # Thai filename on purpose — regression for the RFC 5987
+        # Content-Disposition encoding (headers are latin-1; Thai must not 500)
         doc_id = conn.execute(
             text(
                 "INSERT INTO documents (project_id, minio_key, filename, doc_type, source, "
-                "parse_status, scope) VALUES (:p, :k, 'sample.pdf', 'contract_summary', "
-                "'BORN_DIGITAL', 'COMPLETED', 'PROJECT') RETURNING id"
+                "parse_status, scope) VALUES (:p, :k, 'ราคามาตรฐานทดสอบ.pdf', "
+                "'contract_summary', 'BORN_DIGITAL', 'COMPLETED', 'PROJECT') RETURNING id"
             ),
             {"p": pid, "k": key},
         ).scalar_one()

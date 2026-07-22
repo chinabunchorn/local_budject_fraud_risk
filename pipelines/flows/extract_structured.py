@@ -25,6 +25,14 @@ from decimal import Decimal
 from prefect import flow, get_run_logger, task
 from sqlalchemy import create_engine, text
 
+from common.item_extract import (
+    CandidateProject,
+    extract_item_lines,
+    match_line_to_project,
+    match_tracked_item,
+    report_fiscal_year,
+)
+from common.item_prechecks import ItemFact, compute_item_findings
 from common.prechecks import (
     BidFact,
     ProjectFacts,
@@ -34,6 +42,7 @@ from common.prechecks import (
     yoy_ok_finding,
 )
 from common.settings import database_url
+from common.standard_prices import load_standard_prices, seed_standard_prices
 from common.structured_extract import (
     ContractSummary,
     parse_boq_total,
@@ -59,7 +68,7 @@ class ProjectDocs:
 
 @dataclass
 class Extracted:
-    """Per-project result carried to the portfolio-level YoY pass."""
+    """Per-project result carried to the portfolio-level YoY + item passes."""
 
     project_id: str
     sub_district_id: str
@@ -68,6 +77,9 @@ class Extracted:
     budget: Decimal | None
     winner_name: str | None
     checks: list[dict]  # the seven single-project checks
+    contract_price: Decimal | None = None
+    bid_count: int = 0
+    procurement_method: str | None = None
 
 
 @task
@@ -246,7 +258,133 @@ def extract_project(docs: ProjectDocs) -> Extracted | None:
         budget=summary.budget,
         winner_name=summary.winner.name if summary.winner else None,
         checks=checks,
+        contract_price=facts.contract_price,
+        bid_count=len(facts.bids),
+        procurement_method=summary.procurement_method,
     )
+
+
+@task
+def extract_items(extracted: list[Extracted]) -> dict[str, list[dict]]:
+    """Item pass: seed curated standard prices, pull tracked-item lines out of
+    budget-report chunks (the quantity source the contract summaries lack),
+    match each line to its project by year + sub-district + exact amount,
+    upsert `project_items` with full source citation, then compute the
+    item-level findings (unit-price spike / vendor lock / vs-standard),
+    keyed by project_id for the precheck write."""
+    logger = get_run_logger()
+    engine = create_engine(database_url())
+    by_id = {e.project_id: e for e in extracted}
+    try:
+        seeded = seed_standard_prices(engine)
+        standards = load_standard_prices(engine)
+
+        with engine.connect() as conn:
+            report_chunks = conn.execute(
+                text(
+                    """
+                    SELECT d.id AS document_id, d.filename, d.sub_district_id,
+                           c.page, c.text
+                    FROM documents d
+                    JOIN chunks c ON c.document_id = d.id
+                    WHERE d.doc_type = 'budget_report' AND d.parse_status = 'COMPLETED'
+                    ORDER BY d.id, c.chunk_index
+                    """
+                )
+            ).fetchall()
+
+        facts: list[ItemFact] = []
+        seen: set[tuple[str, str]] = set()  # overlapping chunks repeat lines
+        with engine.begin() as conn:
+            for r in report_chunks:
+                fiscal_year = report_fiscal_year(r.filename)
+                if fiscal_year is None:
+                    continue
+                candidates = [
+                    CandidateProject(
+                        project_id=e.project_id,
+                        sub_district_id=e.sub_district_id,
+                        fiscal_year=e.fiscal_year,
+                        name_th=e.name_th,
+                        contract_price=e.contract_price,
+                    )
+                    for e in extracted
+                    if e.sub_district_id == str(r.sub_district_id)
+                    and e.fiscal_year == fiscal_year
+                ]
+                for line in extract_item_lines(r.text, r.page):
+                    project = match_line_to_project(line, candidates)
+                    if project is None:
+                        logger.warning(
+                            "item line unmatched (%s, FY%s): %s",
+                            r.filename, fiscal_year, line.quote_th[:80],
+                        )
+                        continue
+                    if (project.project_id, line.item_key) in seen:
+                        continue
+                    seen.add((project.project_id, line.item_key))
+                    conn.execute(
+                        text(
+                            """
+                            INSERT INTO project_items
+                                (project_id, item_key, description_th, quantity,
+                                 unit_th, total_amount, source_document_id,
+                                 source_page, source_quote_th)
+                            VALUES (:pid, :key, :desc, :qty, :unit, :total,
+                                    :doc, :page, :quote)
+                            ON CONFLICT (project_id, item_key) DO UPDATE SET
+                                description_th = EXCLUDED.description_th,
+                                quantity = EXCLUDED.quantity,
+                                unit_th = EXCLUDED.unit_th,
+                                total_amount = EXCLUDED.total_amount,
+                                source_document_id = EXCLUDED.source_document_id,
+                                source_page = EXCLUDED.source_page,
+                                source_quote_th = EXCLUDED.source_quote_th,
+                                extracted_at = now()
+                            """
+                        ),
+                        {
+                            "pid": project.project_id,
+                            "key": line.item_key,
+                            "desc": line.description_th,
+                            "qty": line.quantity,
+                            "unit": line.unit_th,
+                            "total": line.total_amount,
+                            "doc": r.document_id,
+                            "page": line.page,
+                            "quote": line.quote_th,
+                        },
+                    )
+                    e = by_id[project.project_id]
+                    tracked = match_tracked_item(line.description_th)
+                    facts.append(
+                        ItemFact(
+                            project_id=e.project_id,
+                            sub_district_id=e.sub_district_id,
+                            fiscal_year=e.fiscal_year,
+                            project_name_th=e.name_th,
+                            item_key=line.item_key,
+                            label_th=tracked.label_th if tracked else line.item_key,
+                            quantity=line.quantity,
+                            unit_th=line.unit_th,
+                            unit_price=line.total_amount / line.quantity,
+                            total_amount=line.total_amount,
+                            winner_name=e.winner_name,
+                            bid_count=e.bid_count,
+                            procurement_method=e.procurement_method,
+                        )
+                    )
+    finally:
+        engine.dispose()
+
+    findings = compute_item_findings(facts, standards)
+    flagged = sum(1 for fs in findings.values() for f in fs if f["status"] == "FLAG")
+    logger.info(
+        "item pass: %d standard price(s) seeded, %d item line(s) matched, "
+        "%d FLAG finding(s)",
+        seeded, len(facts), flagged,
+    )
+    return findings
 
 
 @task
@@ -293,18 +431,22 @@ def extract_structured() -> dict[str, int]:
         for e in extracted
     ]
     yoy = compute_yoy_findings(records)
+    item_findings = extract_items(extracted)
 
     yoy_flagged = 0
     for e in extracted:
         finding = yoy.get(e.project_id, yoy_ok_finding())
         if finding["status"] == "FLAG":
             yoy_flagged += 1
-        write_precheck_results(e.project_id, [*e.checks, finding])
+        write_precheck_results(
+            e.project_id, [*e.checks, finding, *item_findings.get(e.project_id, [])]
+        )
 
     tally = {
         "extracted": len(extracted),
         "skipped": len(docs) - len(extracted),
         "yoy_flagged": yoy_flagged,
+        "item_findings": sum(len(v) for v in item_findings.values()),
     }
     logger.info("structured-extraction summary: %s", tally)
     return tally

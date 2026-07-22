@@ -2930,5 +2930,21 @@
         "NO_TEXT_LAYER"
       ]
     }
+  },
+  "3d114981ea59_ราคามาตรฐานครุภัณฑ์.pdf": {
+    "minio_key": "reference/สำนักงบประมาณ/ราคามาตรฐานครุภัณฑ์/ราคามาตรฐานครุภัณฑ์.pdf",
+    "sha256": "3d114981ea592d34028360b7af25448c94efccf557782c29f13c2aa783968ef9",
+    "pages_needing_ocr": [
+      1,
+      2
+    ],
+    "reasons": {
+      "1": [
+        "NO_TEXT_LAYER"
+      ],
+      "2": [
+        "NO_TEXT_LAYER"
+      ]
+    }
   }
 }

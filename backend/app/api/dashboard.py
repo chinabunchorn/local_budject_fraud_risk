@@ -9,11 +9,17 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from app.api.schemas import (
+    BudgetItemGroup,
+    BudgetItemsResponse,
     BudgetYearPoint,
     ContractorConcentration,
     HeatmapCell,
+    ItemSource,
+    ItemYear,
     OverviewResponse,
     OverviewTotals,
+    PrecheckFinding,
+    StandardPriceOut,
     TopProject,
     TrendsResponse,
     rank_to_level,
@@ -59,3 +65,80 @@ async def trends(session: SessionDep) -> TrendsResponse:
         ).model_dump(mode="json")
 
     return TrendsResponse.model_validate(await cached_json("dashboard:trends", produce))
+
+
+@router.get("/budget-items", response_model=BudgetItemsResponse)
+async def budget_items(session: SessionDep) -> BudgetItemsResponse:
+    """Tracked-item unit-price series (quantities from budget reports, YoY via
+    SQL window functions) + curated standard prices with citations + the
+    item-level precheck findings. Deterministic data only."""
+
+    async def produce() -> dict:
+        data = await queries.budget_items(session)
+        standards = {s["item_key"]: s for s in data["standards"]}
+        findings_by_key: dict[str, list[dict]] = {}
+        for f in data["findings"]:
+            findings_by_key.setdefault(f["item_key"], []).append(f["finding"])
+
+        groups: dict[tuple, BudgetItemGroup] = {}
+        for r in data["rows"]:
+            key = (str(r["sub_district_id"]), r["item_key"])
+            std = standards.get(r["item_key"])
+            if key not in groups:
+                groups[key] = BudgetItemGroup(
+                    item_key=r["item_key"],
+                    label_th=(std["description_th"] if std else r["description_th"]),
+                    sub_district_id=r["sub_district_id"],
+                    sub_district_name_th=r["sub_district_name_th"],
+                    years=[],
+                    standard=(
+                        StandardPriceOut(
+                            description_th=std["description_th"],
+                            standard_unit_price=std["standard_unit_price"],
+                            fiscal_year=std["fiscal_year"],
+                            provenance=std["provenance"],
+                            document_id=std["source_document_id"],
+                            filename=std["source_filename"],
+                            page=std["source_page"],
+                        )
+                        if std
+                        else None
+                    ),
+                    findings=[
+                        PrecheckFinding.model_validate(f)
+                        for f in findings_by_key.get(r["item_key"], [])
+                    ],
+                )
+            unit_price = float(r["unit_price"]) if r["unit_price"] is not None else None
+            pct_of_standard = (
+                round(unit_price / float(std["standard_unit_price"]) * 100, 1)
+                if std and unit_price is not None
+                else None
+            )
+            groups[key].years.append(
+                ItemYear(
+                    fiscal_year=r["fiscal_year"],
+                    project_id=r["project_id"],
+                    project_name_th=r["project_name_th"],
+                    quantity=r["quantity"],
+                    unit_th=r["unit_th"],
+                    total_amount=r["total_amount"],
+                    unit_price=unit_price,
+                    unit_price_yoy_pct=r["unit_price_yoy_pct"],
+                    pct_of_standard=pct_of_standard,
+                    winner_name=r["winner_name"],
+                    bid_count=r["bid_count"],
+                    procurement_method=r["procurement_method"],
+                    source=ItemSource(
+                        document_id=r["source_document_id"],
+                        filename=r["source_filename"],
+                        page=r["source_page"],
+                        quote_th=r["source_quote_th"],
+                    ),
+                )
+            )
+        return BudgetItemsResponse(items=list(groups.values())).model_dump(mode="json")
+
+    return BudgetItemsResponse.model_validate(
+        await cached_json("dashboard:budget-items", produce)
+    )

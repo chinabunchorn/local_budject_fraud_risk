@@ -109,6 +109,43 @@ class Chunk(Base):
     document: Mapped[Document] = relationship(lazy="joined")
 
 
+class ProjectItem(Base):
+    """Tracked line item (migration 0006): quantity from the budget report,
+    unit_price is a DB-generated column (total / quantity)."""
+
+    __tablename__ = "project_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"))
+    item_key: Mapped[str]
+    description_th: Mapped[str]
+    quantity: Mapped[Decimal]
+    unit_th: Mapped[str | None]
+    total_amount: Mapped[Decimal]
+    unit_price: Mapped[Decimal | None]
+    source_document_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("documents.id"))
+    source_page: Mapped[int | None]
+    source_quote_th: Mapped[str | None]
+    extracted_at: Mapped[datetime]
+
+
+class StandardPrice(Base):
+    """Curated reference unit price (migration 0006), citing the scanned
+    standard-price book so the auditor can verify the number in the viewer."""
+
+    __tablename__ = "standard_prices"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    item_key: Mapped[str]
+    description_th: Mapped[str]
+    standard_unit_price: Mapped[Decimal]
+    fiscal_year: Mapped[int | None]
+    source_document_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("documents.id"))
+    source_page: Mapped[int | None]
+    provenance: Mapped[str]
+    created_at: Mapped[datetime]
+
+
 class Regulation(Base):
     __tablename__ = "regulations"
 

@@ -303,3 +303,89 @@ async def trends(session: AsyncSession) -> dict[str, Any]:
         "budget_by_year": [dict(r) for r in budget_rows],
         "contractor_concentration": [dict(r) for r in contractor_rows],
     }
+
+
+async def budget_items(session: AsyncSession) -> dict[str, Any]:
+    """Tracked-item unit-price series across fiscal years (SQL window
+    functions), the curated standard price with its citation, and the
+    item-level precheck findings of the member projects."""
+    rows = (
+        await session.execute(
+            text(
+                """
+                SELECT pi.item_key,
+                       pi.description_th,
+                       pi.quantity,
+                       pi.unit_th,
+                       pi.total_amount,
+                       pi.unit_price,
+                       pi.source_page,
+                       pi.source_quote_th,
+                       pi.source_document_id,
+                       src.filename AS source_filename,
+                       p.id AS project_id,
+                       p.name_th AS project_name_th,
+                       p.fiscal_year,
+                       p.procurement_method,
+                       sd.id AS sub_district_id,
+                       sd.name_th AS sub_district_name_th,
+                       w.bidder_name_th AS winner_name,
+                       (SELECT count(*) FROM bids b WHERE b.project_id = p.id)
+                           AS bid_count,
+                       round(
+                         100.0 * (pi.unit_price - lag(pi.unit_price) OVER w)
+                               / nullif(lag(pi.unit_price) OVER w, 0),
+                         1
+                       ) AS unit_price_yoy_pct
+                FROM project_items pi
+                JOIN projects p ON p.id = pi.project_id
+                JOIN sub_districts sd ON sd.id = p.sub_district_id
+                LEFT JOIN documents src ON src.id = pi.source_document_id
+                LEFT JOIN bids w ON w.project_id = p.id AND w.is_winner
+                WINDOW w AS (
+                    PARTITION BY sd.id, pi.item_key ORDER BY p.fiscal_year
+                )
+                ORDER BY sd.name_th, pi.item_key, p.fiscal_year
+                """
+            )
+        )
+    ).mappings().all()
+
+    standards = (
+        await session.execute(
+            text(
+                """
+                SELECT sp.item_key, sp.description_th, sp.standard_unit_price,
+                       sp.fiscal_year, sp.source_document_id, sp.source_page,
+                       sp.provenance, doc.filename AS source_filename
+                FROM standard_prices sp
+                LEFT JOIN documents doc ON doc.id = sp.source_document_id
+                """
+            )
+        )
+    ).mappings().all()
+
+    findings = (
+        await session.execute(
+            text(
+                """
+                SELECT DISTINCT ON (c->>'name', c->>'detail')
+                       pi.item_key, c AS finding
+                FROM project_items pi
+                JOIN precheck_results pr ON pr.project_id = pi.project_id
+                CROSS JOIN LATERAL jsonb_array_elements(pr.checks) c
+                WHERE c->>'name' IN
+                    ('unit_price_yoy_spike', 'item_vendor_lock',
+                     'unit_price_vs_standard')
+                  AND c->'values'->>'item_key' = pi.item_key
+                ORDER BY c->>'name', c->>'detail'
+                """
+            )
+        )
+    ).mappings().all()
+
+    return {
+        "rows": [dict(r) for r in rows],
+        "standards": [dict(r) for r in standards],
+        "findings": [dict(r) for r in findings],
+    }

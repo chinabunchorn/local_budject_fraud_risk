@@ -250,3 +250,59 @@ class TrendsResponse(BaseModel):
     budget_by_year: list[BudgetYearPoint]
     contractor_concentration: list[ContractorConcentration]
     disclaimer_th: str = DISCLAIMER_TH
+
+
+# ---- budget items (tracked-item anomaly page) ----------------------------------
+
+
+class ItemSource(BaseModel):
+    """Where the quantity/total came from — opens in the PDF viewer."""
+
+    document_id: UUID | None
+    filename: str | None
+    page: int | None
+    quote_th: str | None
+
+
+class ItemYear(BaseModel):
+    fiscal_year: int
+    project_id: UUID
+    project_name_th: str
+    quantity: float
+    unit_th: str | None
+    total_amount: float
+    unit_price: float | None
+    unit_price_yoy_pct: float | None
+    pct_of_standard: float | None
+    winner_name: str | None
+    bid_count: int
+    procurement_method: str | None
+    source: ItemSource
+
+
+class StandardPriceOut(BaseModel):
+    """Curated reference price with its citation — provenance is shown to the
+    auditor, never hidden."""
+
+    description_th: str
+    standard_unit_price: float
+    fiscal_year: int | None
+    provenance: str
+    document_id: UUID | None
+    filename: str | None
+    page: int | None
+
+
+class BudgetItemGroup(BaseModel):
+    item_key: str
+    label_th: str
+    sub_district_id: UUID
+    sub_district_name_th: str
+    years: list[ItemYear]
+    standard: StandardPriceOut | None
+    findings: list[PrecheckFinding]
+
+
+class BudgetItemsResponse(BaseModel):
+    items: list[BudgetItemGroup]
+    disclaimer_th: str = DISCLAIMER_TH

@@ -68,6 +68,9 @@ export const PRECHECK_LABELS_TH: Record<string, string> = {
   procurement_threshold: "เกณฑ์วงเงินของวิธีจัดซื้อจัดจ้าง",
   expected_documents: "เอกสารประกอบตามวิธีจัดซื้อจัดจ้าง",
   yoy_budget_anomaly: "งบประมาณโครงการต่อเนื่องรายปี",
+  unit_price_yoy_spike: "ราคาต่อหน่วยของรายการจัดซื้อซ้ำรายปี",
+  item_vendor_lock: "ผู้ขายรายเดิมในรายการจัดซื้อซ้ำ",
+  unit_price_vs_standard: "ราคาต่อหน่วยเทียบราคามาตรฐาน",
 };
 
 export const PRECHECK_STATUS_TH: Record<

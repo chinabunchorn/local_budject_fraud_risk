@@ -15,6 +15,7 @@ export const DISCLAIMER_TH =
 const NAV = [
   { href: "/", label: "ภาพรวม" },
   { href: "/projects", label: "โครงการ" },
+  { href: "/budget-items", label: "สรุปการจัดซื้อ" },
   { href: "/trends", label: "แนวโน้ม" },
 ];
 

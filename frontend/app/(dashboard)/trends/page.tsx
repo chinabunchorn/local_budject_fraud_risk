@@ -163,7 +163,7 @@ export default function TrendsPage() {
       <div>
         <h1 className="text-xl font-semibold text-foreground">แนวโน้มและการกระจุกตัว</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          วิเคราะห์ด้วยฐานข้อมูลโดยตรง (SQL) จากข้อมูลที่สกัดจากเอกสารจริง — ไม่ใช้แบบจำลองภาษา
+          วิเคราะห์ด้วยฐานข้อมูลโดยตรง (SQL) จากข้อมูลที่สกัดจากเอกสารจริง
         </p>
       </div>
 

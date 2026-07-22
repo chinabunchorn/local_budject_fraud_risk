@@ -204,6 +204,10 @@ async def test_document_file_serves_real_pdf(client, auth_headers, document_with
     # application/octet-stream (verified against the real bucket).
     assert resp.headers["content-type"] == "application/pdf"
     assert resp.content.startswith(b"%PDF-")
+    # Thai filename must survive header encoding (RFC 5987), never 500
+    disposition = resp.headers["content-disposition"]
+    assert "filename*=UTF-8''" in disposition
+    assert disposition.isascii()
 
 
 async def test_document_file_404_for_unknown_document(client, auth_headers):
@@ -216,3 +220,43 @@ async def test_document_file_404_for_unknown_document(client, auth_headers):
 async def test_document_file_requires_auth(client, document_with_file):
     resp = await client.get(f"/api/documents/{document_with_file}/file")
     assert resp.status_code == 401
+
+
+# ---- budget items (tracked-item anomaly page) -----------------------------------
+
+
+async def test_budget_items_unit_price_series(
+    client, auth_headers, seeded_items, clear_dashboard_cache
+):
+    from app.services.cache import get_redis
+
+    try:
+        await get_redis().delete("dashboard:budget-items")
+    except Exception:
+        pass
+    resp = await client.get("/api/dashboard/budget-items", headers=auth_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    group = next(
+        g for g in body["items"] if g["item_key"] == "test-tank-2000l"
+    )
+    assert group["standard"]["standard_unit_price"] == 7000.0
+    assert group["standard"]["provenance"] == "CURATED"
+    assert group["standard"]["document_id"] is not None  # citation resolves
+
+    years = group["years"]
+    assert [y["fiscal_year"] for y in years] == [2566, 2567]
+    assert years[0]["unit_price"] == 4500.0
+    assert years[0]["unit_price_yoy_pct"] is None  # first recorded year
+    assert years[1]["unit_price"] == 6800.0
+    assert years[1]["unit_price_yoy_pct"] == 51.1  # SQL window, not Python
+    assert years[0]["pct_of_standard"] == 64.3
+    assert years[1]["pct_of_standard"] == 97.1
+    # quantity source citation opens in the PDF viewer
+    assert years[0]["source"]["document_id"] is not None
+    assert years[0]["source"]["page"] == 12
+    assert "ผู้ตรวจสอบ" in body["disclaimer_th"]
+    try:
+        await get_redis().delete("dashboard:budget-items")
+    except Exception:
+        pass

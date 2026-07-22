@@ -262,3 +262,53 @@ export interface TrendsResponse {
   contractor_concentration: ContractorConcentration[];
   disclaimer_th: string;
 }
+
+// ---- budget items (tracked-item anomaly page) ---------------------------------
+
+export interface ItemSource {
+  document_id: string | null;
+  filename: string | null;
+  page: number | null;
+  quote_th: string | null;
+}
+
+export interface ItemYear {
+  fiscal_year: number;
+  project_id: string;
+  project_name_th: string;
+  quantity: number;
+  unit_th: string | null;
+  total_amount: number;
+  unit_price: number | null;
+  unit_price_yoy_pct: number | null;
+  pct_of_standard: number | null;
+  winner_name: string | null;
+  bid_count: number;
+  procurement_method: string | null;
+  source: ItemSource;
+}
+
+export interface StandardPriceOut {
+  description_th: string;
+  standard_unit_price: number;
+  fiscal_year: number | null;
+  provenance: string;
+  document_id: string | null;
+  filename: string | null;
+  page: number | null;
+}
+
+export interface BudgetItemGroup {
+  item_key: string;
+  label_th: string;
+  sub_district_id: string;
+  sub_district_name_th: string;
+  years: ItemYear[];
+  standard: StandardPriceOut | null;
+  findings: PrecheckFinding[];
+}
+
+export interface BudgetItemsResponse {
+  items: BudgetItemGroup[];
+  disclaimer_th: string;
+}

@@ -11,6 +11,7 @@ application/octet-stream on real uploads) so `application/pdf` is forced here.
 from __future__ import annotations
 
 import uuid
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -51,8 +52,12 @@ async def get_document_file(document_id: uuid.UUID, session: SessionDep) -> Stre
             resp.close()
             resp.release_conn()
 
+    # HTTP headers are latin-1; Thai filenames (most of the corpus) must go in
+    # the RFC 5987 filename* parameter, with a plain-ASCII fallback filename.
+    encoded = quote(doc.filename, safe="")
+    disposition = f"inline; filename=\"document.pdf\"; filename*=UTF-8''{encoded}"
     return StreamingResponse(
         iterfile(),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{doc.filename}"'},
+        headers={"Content-Disposition": disposition},
     )
