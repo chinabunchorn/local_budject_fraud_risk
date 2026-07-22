@@ -286,6 +286,12 @@ async def test_budget_report_trends(client, auth_headers, seeded_budget_reports,
     assert years[1]["total_budget"] == 1_500_000.0
     assert years[1]["budget_yoy_pct"] == 50.0  # SQL window, not Python
     assert years[1]["document_id"] is not None  # cites the source report
+    # top-3 highest-budget items, ranked descending
+    tops = years[0]["top_items"]
+    assert len(tops) == 3
+    assert tops[0]["description_th"] == "โครงการเบี้ยยังชีพผู้สูงอายุ"
+    assert tops[0]["amount"] == 500000.0
+    assert [t["amount"] for t in tops] == sorted((t["amount"] for t in tops), reverse=True)
     assert "ผู้ตรวจสอบ" in body["disclaimer_th"]
     try:
         await get_redis().delete("dashboard:budget-report-trends")

@@ -19,10 +19,16 @@ Run:  cd pipelines && python -m flows.extract_budget_summaries
 
 from __future__ import annotations
 
+import json
+
 from prefect import flow, get_run_logger, task
 from sqlalchemy import create_engine, text
 
-from common.budget_report_extract import MIN_LINE_ITEMS, sum_budget_report
+from common.budget_report_extract import (
+    MIN_LINE_ITEMS,
+    sum_budget_report,
+    top_line_items,
+)
 from common.item_extract import report_fiscal_year
 from common.settings import database_url
 
@@ -92,12 +98,13 @@ def write_summary(report: dict) -> str:
                     """
                     INSERT INTO budget_report_summaries
                         (sub_district_id, fiscal_year, document_id,
-                         total_budget, project_count)
-                    VALUES (:sd, :fy, :doc, :total, :count)
+                         total_budget, project_count, top_items)
+                    VALUES (:sd, :fy, :doc, :total, :count, CAST(:top AS jsonb))
                     ON CONFLICT (sub_district_id, fiscal_year) DO UPDATE SET
                         document_id = EXCLUDED.document_id,
                         total_budget = EXCLUDED.total_budget,
                         project_count = EXCLUDED.project_count,
+                        top_items = EXCLUDED.top_items,
                         extracted_at = now()
                     """
                 ),
@@ -107,6 +114,7 @@ def write_summary(report: dict) -> str:
                     "doc": report["document_id"],
                     "total": summary.total_budget,
                     "count": summary.project_count,
+                    "top": json.dumps(top_line_items(summary, 3), ensure_ascii=False),
                 },
             )
     finally:

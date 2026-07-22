@@ -89,13 +89,16 @@ def seeded_budget_reports(engine, seeded):
             conn.execute(
                 text(
                     "INSERT INTO budget_report_summaries (sub_district_id, fiscal_year, "
-                    "document_id, total_budget, project_count) "
-                    "VALUES (:sd, :fy, :doc, :total, :count) "
+                    "document_id, total_budget, project_count, top_items) "
+                    "VALUES (:sd, :fy, :doc, :total, :count, CAST(:top AS jsonb)) "
                     "ON CONFLICT (sub_district_id, fiscal_year) DO UPDATE SET "
-                    "total_budget = EXCLUDED.total_budget"
+                    "total_budget = EXCLUDED.total_budget, top_items = EXCLUDED.top_items"
                 ),
                 {"sd": seeded["sub_district"], "fy": fy, "doc": seeded["document"],
-                 "total": total, "count": count},
+                 "total": total, "count": count,
+                 "top": '[{"description_th": "โครงการเบี้ยยังชีพผู้สูงอายุ", "amount": "500000"}, '
+                        '{"description_th": "โครงการก่อสร้างถนนทดสอบ", "amount": "300000"}, '
+                        '{"description_th": "โครงการเล็กทดสอบ", "amount": "100000"}]'},
             )
     yield seeded
     # rows cascade away with the seeded sub-district

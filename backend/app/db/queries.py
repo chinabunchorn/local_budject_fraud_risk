@@ -404,6 +404,7 @@ async def budget_report_summaries(session: AsyncSession) -> list[dict[str, Any]]
                        b.fiscal_year,
                        b.total_budget,
                        b.project_count,
+                       b.top_items,
                        b.document_id,
                        doc.filename AS document_filename,
                        round(

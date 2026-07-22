@@ -158,6 +158,7 @@ class BudgetReportSummary(Base):
     document_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("documents.id"))
     total_budget: Mapped[Decimal]
     project_count: Mapped[int]
+    top_items: Mapped[list[Any]] = mapped_column(JSONB)
     extracted_at: Mapped[datetime]
 
 

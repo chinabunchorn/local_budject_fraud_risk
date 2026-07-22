@@ -66,3 +66,10 @@ def sum_budget_report(chunk_texts: list[str]) -> BudgetReportSummary:
     items = list(seen.values())
     total = sum((li.amount for li in items), Decimal("0"))
     return BudgetReportSummary(total_budget=total, project_count=len(items), line_items=items)
+
+
+def top_line_items(summary: BudgetReportSummary, n: int = 3) -> list[dict]:
+    """The n highest-budget line items, amount-descending, as JSON-ready dicts
+    (amount kept as a string to preserve Decimal exactness)."""
+    ranked = sorted(summary.line_items, key=lambda li: li.amount, reverse=True)[:n]
+    return [{"description_th": li.description_th, "amount": str(li.amount)} for li in ranked]

@@ -311,11 +311,17 @@ class BudgetItemsResponse(BaseModel):
 # ---- budget-report trends (ภาพรวม budget-by-year chart) -------------------------
 
 
+class BudgetTopItem(BaseModel):
+    description_th: str
+    amount: float
+
+
 class BudgetReportYear(BaseModel):
     fiscal_year: int
     total_budget: float
     project_count: int
     budget_yoy_pct: float | None
+    top_items: list[BudgetTopItem]
     document_id: UUID | None
     document_filename: str | None
 

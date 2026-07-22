@@ -122,6 +122,54 @@ function SubDistrictBudgetCard({
   );
 }
 
+function TopProjectsCard({ group }: { group: BudgetReportGroup }) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-6">
+      <h3 className="font-medium text-foreground">
+        3 อันดับรายการงบประมาณสูงสุด รายปี
+      </h3>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        รายการที่มีงบประมาณสูงสุดในรายงานงบประมาณของแต่ละปี — {group.sub_district_name_th}
+      </p>
+      <div className="mt-4 space-y-4">
+        {group.years.map((y) => (
+          <div key={y.fiscal_year}>
+            <div className="flex items-baseline justify-between border-b border-border pb-1">
+              <span className="text-sm font-medium text-foreground">
+                ปีงบประมาณ {y.fiscal_year}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                จาก {y.project_count} รายการ
+              </span>
+            </div>
+            <ol className="mt-2 space-y-1.5">
+              {y.top_items.map((item, i) => (
+                <li key={i} className="flex items-baseline gap-2 text-sm">
+                  <span className="w-4 shrink-0 text-right text-xs text-muted-foreground">
+                    {i + 1}.
+                  </span>
+                  <span
+                    className="min-w-0 flex-1 truncate text-foreground"
+                    title={item.description_th}
+                  >
+                    {item.description_th}
+                  </span>
+                  <span className="tnum shrink-0 font-medium text-foreground">
+                    {bahtCompact(item.amount)}
+                  </span>
+                </li>
+              ))}
+              {y.top_items.length === 0 ? (
+                <li className="text-sm text-muted-foreground">ไม่มีข้อมูลรายการ</li>
+              ) : null}
+            </ol>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function BudgetTrendSection() {
   const { token } = useAuth();
   const { data } = useApi<BudgetReportTrendsResponse>("/dashboard/budget-report-trends");
@@ -140,13 +188,12 @@ export function BudgetTrendSection() {
           ข้อมูลจากเอกสารจริง ไม่ใช้แบบจำลองภาษา
         </p>
       </div>
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="space-y-6">
         {data.items.map((group) => (
-          <SubDistrictBudgetCard
-            key={group.sub_district_id}
-            group={group}
-            onOpenDocument={viewer.openDocument}
-          />
+          <div key={group.sub_district_id} className="grid gap-6 lg:grid-cols-2">
+            <SubDistrictBudgetCard group={group} onOpenDocument={viewer.openDocument} />
+            <TopProjectsCard group={group} />
+          </div>
         ))}
       </div>
       <DocumentViewerDialog

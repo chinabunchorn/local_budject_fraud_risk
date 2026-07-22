@@ -14,6 +14,7 @@ from app.api.schemas import (
     BudgetReportGroup,
     BudgetReportTrendsResponse,
     BudgetReportYear,
+    BudgetTopItem,
     BudgetYearPoint,
     ContractorConcentration,
     HeatmapCell,
@@ -78,6 +79,7 @@ async def budget_report_trends(session: SessionDep) -> BudgetReportTrendsRespons
                     total_budget=r["total_budget"],
                     project_count=r["project_count"],
                     budget_yoy_pct=r["budget_yoy_pct"],
+                    top_items=[BudgetTopItem(**t) for t in (r["top_items"] or [])],
                     document_id=r["document_id"],
                     document_filename=r["document_filename"],
                 )

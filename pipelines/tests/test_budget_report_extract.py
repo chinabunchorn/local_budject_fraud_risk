@@ -2,7 +2,11 @@
 
 from decimal import Decimal
 
-from common.budget_report_extract import MIN_LINE_ITEMS, sum_budget_report
+from common.budget_report_extract import (
+    MIN_LINE_ITEMS,
+    sum_budget_report,
+    top_line_items,
+)
 
 
 def _rows(*pairs: tuple[str, str]) -> str:
@@ -60,3 +64,25 @@ def test_empty_report():
     s = sum_budget_report(["no table here, just prose about the budget policy"])
     assert s.project_count == 0
     assert s.total_budget == Decimal("0")
+
+
+def test_top_line_items_ranked_desc():
+    chunk = _rows(
+        ("โครงการก่อสร้างถนน", "1,724,000"),
+        ("โครงการเบี้ยยังชีพผู้สูงอายุ", "11,859,100"),
+        ("โครงการเบี้ยยังชีพคนพิการ", "2,120,600"),
+        ("โครงการเล็ก", "50,000"),
+    )
+    top = top_line_items(sum_budget_report([chunk]), n=3)
+    assert [t["description_th"] for t in top] == [
+        "โครงการเบี้ยยังชีพผู้สูงอายุ",
+        "โครงการเบี้ยยังชีพคนพิการ",
+        "โครงการก่อสร้างถนน",
+    ]
+    assert top[0]["amount"] == "11859100"  # string, Decimal-exact
+    assert len(top) == 3
+
+
+def test_top_line_items_fewer_than_n():
+    top = top_line_items(sum_budget_report([_rows(("โครงการเดียว", "100,000"))]), n=3)
+    assert len(top) == 1
