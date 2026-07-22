@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { EChartsOption } from "echarts";
+import { FileText } from "lucide-react";
 
 import { Chart, baseOption } from "@/components/chart";
 import { RiskBadge } from "@/components/risk-badge";
@@ -38,25 +39,72 @@ import {
   viz,
 } from "@/lib/viz";
 
-function CitationButton({
+/** Dedupe citations that point at the same chunk (a factor's summary list
+ * often repeats chunks already cited inside its individual reasoning steps). */
+function dedupeByChunk(citations: Citation[]): Citation[] {
+  const seen = new Set<string>();
+  const out: Citation[] = [];
+  for (const c of citations) {
+    if (seen.has(c.chunk_id)) continue;
+    seen.add(c.chunk_id);
+    out.push(c);
+  }
+  return out;
+}
+
+/**
+ * Evidence, shown inline under the reasoning step it supports — the source
+ * document name and excerpt are visible without a click, so an auditor can
+ * check a cited budget figure directly against the document. "View full
+ * text" still opens the dialog for the complete, scrollable passage.
+ */
+function EvidenceCard({
   citation,
-  index,
-  onOpen,
+  chunk,
+  onOpenFull,
 }: {
   citation: Citation;
-  index: number;
-  onOpen: (chunkId: string) => void;
+  chunk: ChunkOut | null | undefined;
+  onOpenFull: (chunkId: string) => void;
 }) {
+  const page = citation.page ?? chunk?.page ?? null;
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(citation.chunk_id)}
-      className="inline-flex items-center gap-1 rounded border border-border bg-white px-1.5 py-0.5 text-xs text-primary hover:bg-accent"
-      title="เปิดดูข้อความต้นทางจากเอกสาร"
-    >
-      อ้างอิง {index + 1}
-      {citation.page ? ` · หน้า ${citation.page}` : ""}
-    </button>
+    <div className="rounded-md border border-border bg-muted/30 px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+        <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+          <FileText className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          {chunk
+            ? chunk.document.filename
+            : chunk === null
+              ? "ไม่พบเอกสารต้นทาง"
+              : "กำลังโหลดเอกสาร…"}
+        </span>
+        {page ? <span className="text-muted-foreground">หน้า {page}</span> : null}
+        {chunk?.document.doc_type ? (
+          <span className="rounded border border-border bg-white px-1.5 py-0.5 text-muted-foreground">
+            {chunk.document.doc_type}
+          </span>
+        ) : null}
+      </div>
+      {chunk ? (
+        <p className="mt-1.5 line-clamp-4 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+          {chunk.text}
+        </p>
+      ) : chunk === null ? (
+        <p className="mt-1.5 text-sm text-muted-foreground">ไม่สามารถโหลดข้อความต้นทางได้ในขณะนี้</p>
+      ) : (
+        <p className="mt-1.5 text-sm text-muted-foreground">กำลังโหลดข้อความอ้างอิง…</p>
+      )}
+      {chunk ? (
+        <button
+          type="button"
+          onClick={() => onOpenFull(citation.chunk_id)}
+          className="mt-1.5 text-xs font-medium text-primary hover:underline"
+        >
+          ดูข้อความฉบับเต็ม
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -75,11 +123,54 @@ export default function ProjectDetailPage() {
   const [feedbackText, setFeedbackText] = useState("");
   const [posting, setPosting] = useState(false);
 
+  // Every cited chunk behind the reasoning steps, fetched once so the source
+  // document + excerpt can render inline (see EvidenceCard) instead of
+  // requiring a click-through per citation.
+  const [chunkById, setChunkById] = useState<Record<string, ChunkOut | null>>({});
+
+  useEffect(() => {
+    const risk = data?.risk?.result;
+    if (!risk || !token) return;
+    const ids = new Set<string>();
+    for (const f of risk.factors) {
+      for (const c of f.citations) ids.add(c.chunk_id);
+      for (const s of f.reasoning_steps) for (const c of s.citations) ids.add(c.chunk_id);
+    }
+    const missing = [...ids].filter((cid) => !(cid in chunkById));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      missing.map((cid) =>
+        api<ChunkOut>(`/chunks/${cid}`, token)
+          .then((c) => [cid, c] as const)
+          .catch(() => [cid, null] as const),
+      ),
+    ).then((pairs) => {
+      if (cancelled) return;
+      setChunkById((prev) => {
+        const next = { ...prev };
+        for (const [cid, c] of pairs) next[cid] = c;
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [data, token, chunkById]);
+
   async function openChunk(chunkId: string) {
+    const cached = chunkById[chunkId];
+    if (cached) {
+      setChunk(cached);
+      setChunkOpen(true);
+      return;
+    }
     setChunk(null);
     setChunkOpen(true);
     try {
-      setChunk(await api<ChunkOut>(`/chunks/${chunkId}`, token));
+      const c = await api<ChunkOut>(`/chunks/${chunkId}`, token);
+      setChunk(c);
+      setChunkById((prev) => ({ ...prev, [chunkId]: c }));
     } catch {
       setChunkOpen(false);
     }
@@ -270,11 +361,10 @@ export default function ProjectDetailPage() {
         <section className="rounded-lg border border-border bg-card">
           <div className="border-b border-border px-6 py-4">
             <h2 className="font-medium text-foreground">
-              เส้นทางการให้เหตุผลของแบบจำลอง
+              การให้เหตุผลเชิงตรรกะของแบบจำลอง (Model Reasoning)
             </h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              สร้างโดยแบบจำลองภายใต้โครงสร้างบังคับ (หลักฐาน → ข้อสังเกต → การตีความ)
-              และผ่านการตรวจสอบถ้อยคำและการอ้างอิงแล้ว — ไม่ใช่ข้อสรุปของผู้ตรวจสอบ
+              สาระเหตุผลเชิงตรรกะของแบบจำลองนี้ได้ผ่านการตรวจสอบถ้อยคำและการอ้างอิงแล้ว — ไม่ใช่ข้อสรุปของผู้ตรวจสอบ
             </p>
           </div>
           <div className="divide-y divide-border">
@@ -291,33 +381,46 @@ export default function ProjectDetailPage() {
                 <p className="mt-2 text-[15px] leading-relaxed text-foreground">
                   {f.rationale_th}
                 </p>
-                <ol className="mt-4 space-y-3">
+                <ol className="mt-4 space-y-4">
                   {f.reasoning_steps.map((step, i) => (
                     <li key={i} className="flex gap-3">
                       <span className="mt-0.5 inline-flex h-6 shrink-0 items-center rounded border border-border bg-muted px-2 text-xs font-medium text-muted-foreground">
                         {STEP_LABELS_TH[step.step_type] ?? step.step_type}
                       </span>
-                      <span className="text-sm leading-relaxed text-foreground">
-                        {step.text_th}{" "}
-                        {step.citations.map((c, ci) => (
-                          <CitationButton
-                            key={ci}
-                            citation={c}
-                            index={ci}
-                            onOpen={openChunk}
-                          />
-                        ))}
-                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm leading-relaxed text-foreground">{step.text_th}</p>
+                        {step.citations.length > 0 ? (
+                          <div className="mt-2 space-y-2">
+                            {step.citations.map((c, ci) => (
+                              <EvidenceCard
+                                key={ci}
+                                citation={c}
+                                chunk={chunkById[c.chunk_id]}
+                                onOpenFull={openChunk}
+                              />
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
                     </li>
                   ))}
                 </ol>
                 {f.citations.length > 0 ? (
-                  <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                    เอกสารอ้างอิงของปัจจัยนี้:
-                    {f.citations.map((c, ci) => (
-                      <CitationButton key={ci} citation={c} index={ci} onOpen={openChunk} />
-                    ))}
-                  </p>
+                  <div className="mt-4 border-t border-border pt-4">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      หลักฐานเอกสารประกอบปัจจัยนี้ — ตรวจสอบตัวเลขกับต้นฉบับได้โดยตรง
+                    </p>
+                    <div className="mt-2 space-y-2">
+                      {dedupeByChunk(f.citations).map((c) => (
+                        <EvidenceCard
+                          key={c.chunk_id}
+                          citation={c}
+                          chunk={chunkById[c.chunk_id]}
+                          onOpenFull={openChunk}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 ) : null}
               </div>
             ))}
