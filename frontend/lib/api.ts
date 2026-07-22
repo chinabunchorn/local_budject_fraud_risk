@@ -312,3 +312,25 @@ export interface BudgetItemsResponse {
   items: BudgetItemGroup[];
   disclaimer_th: string;
 }
+
+// ---- budget-report trends (ภาพรวม budget-by-year chart) ------------------------
+
+export interface BudgetReportYear {
+  fiscal_year: number;
+  total_budget: number;
+  project_count: number;
+  budget_yoy_pct: number | null;
+  document_id: string | null;
+  document_filename: string | null;
+}
+
+export interface BudgetReportGroup {
+  sub_district_id: string;
+  sub_district_name_th: string;
+  years: BudgetReportYear[];
+}
+
+export interface BudgetReportTrendsResponse {
+  items: BudgetReportGroup[];
+  disclaimer_th: string;
+}

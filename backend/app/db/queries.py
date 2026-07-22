@@ -389,3 +389,35 @@ async def budget_items(session: AsyncSession) -> dict[str, Any]:
         "standards": [dict(r) for r in standards],
         "findings": [dict(r) for r in findings],
     }
+
+
+async def budget_report_summaries(session: AsyncSession) -> list[dict[str, Any]]:
+    """Per-year budget totals summed from sub-district budget reports (SQL
+    window functions for YoY), grouped by sub-district. Deterministic data;
+    no LLM. Each year cites its source report document for the PDF viewer."""
+    rows = (
+        await session.execute(
+            text(
+                """
+                SELECT sd.id AS sub_district_id,
+                       sd.name_th AS sub_district_name_th,
+                       b.fiscal_year,
+                       b.total_budget,
+                       b.project_count,
+                       b.document_id,
+                       doc.filename AS document_filename,
+                       round(
+                         100.0 * (b.total_budget - lag(b.total_budget) OVER w)
+                               / nullif(lag(b.total_budget) OVER w, 0),
+                         1
+                       ) AS budget_yoy_pct
+                FROM budget_report_summaries b
+                JOIN sub_districts sd ON sd.id = b.sub_district_id
+                LEFT JOIN documents doc ON doc.id = b.document_id
+                WINDOW w AS (PARTITION BY b.sub_district_id ORDER BY b.fiscal_year)
+                ORDER BY sd.name_th, b.fiscal_year
+                """
+            )
+        )
+    ).mappings().all()
+    return [dict(r) for r in rows]

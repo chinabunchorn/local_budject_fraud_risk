@@ -11,6 +11,9 @@ from fastapi import APIRouter, Depends
 from app.api.schemas import (
     BudgetItemGroup,
     BudgetItemsResponse,
+    BudgetReportGroup,
+    BudgetReportTrendsResponse,
+    BudgetReportYear,
     BudgetYearPoint,
     ContractorConcentration,
     HeatmapCell,
@@ -51,6 +54,39 @@ async def overview(session: SessionDep) -> OverviewResponse:
         ).model_dump(mode="json")
 
     return OverviewResponse.model_validate(await cached_json("dashboard:overview", produce))
+
+
+@router.get("/budget-report-trends", response_model=BudgetReportTrendsResponse)
+async def budget_report_trends(session: SessionDep) -> BudgetReportTrendsResponse:
+    """Multi-year budget totals summed from sub-district budget reports (shown
+    on ภาพรวม). Deterministic; each year cites its source report PDF."""
+
+    async def produce() -> dict:
+        rows = await queries.budget_report_summaries(session)
+        groups: dict[str, BudgetReportGroup] = {}
+        for r in rows:
+            sd_id = str(r["sub_district_id"])
+            if sd_id not in groups:
+                groups[sd_id] = BudgetReportGroup(
+                    sub_district_id=r["sub_district_id"],
+                    sub_district_name_th=r["sub_district_name_th"],
+                    years=[],
+                )
+            groups[sd_id].years.append(
+                BudgetReportYear(
+                    fiscal_year=r["fiscal_year"],
+                    total_budget=r["total_budget"],
+                    project_count=r["project_count"],
+                    budget_yoy_pct=r["budget_yoy_pct"],
+                    document_id=r["document_id"],
+                    document_filename=r["document_filename"],
+                )
+            )
+        return BudgetReportTrendsResponse(items=list(groups.values())).model_dump(mode="json")
+
+    return BudgetReportTrendsResponse.model_validate(
+        await cached_json("dashboard:budget-report-trends", produce)
+    )
 
 
 @router.get("/trends", response_model=TrendsResponse)

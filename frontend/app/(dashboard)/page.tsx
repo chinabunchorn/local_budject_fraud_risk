@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { EChartsOption } from "echarts";
 
+import { BudgetTrendSection } from "@/components/budget-trend-section";
 import { Chart, baseOption } from "@/components/chart";
 import { RiskBadge } from "@/components/risk-badge";
 import { StatTile } from "@/components/stat-tile";
@@ -238,6 +239,8 @@ export default function OverviewPage() {
           </tbody>
         </table>
       </section>
+
+      <BudgetTrendSection />
     </div>
   );
 }
