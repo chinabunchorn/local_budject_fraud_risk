@@ -41,6 +41,64 @@ def engine():
     eng.dispose()
 
 
+@pytest.fixture()
+def document_with_file(engine):
+    """A throwaway document row whose minio_key points at a real tiny PDF
+    uploaded to the corpus bucket — exercises the actual MinIO round trip the
+    /documents/{id}/file endpoint depends on, not just the DB row. Skips
+    cleanly when MinIO is unreachable, same convention as `engine`."""
+    from io import BytesIO
+
+    from app.services.storage import get_minio_client
+
+    settings = get_settings()
+    client = get_minio_client()
+    try:
+        client.bucket_exists(settings.minio_bucket_corpus)
+    except Exception:
+        pytest.skip("MinIO not reachable — start the compose stack and source .env")
+
+    # Minimal syntactically-valid single-page PDF — enough for the endpoint's
+    # content-type/streaming behavior, not a real document.
+    pdf_bytes = (
+        b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+        b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+        b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\n"
+        b"trailer<</Root 1 0 R>>\n%%EOF"
+    )
+    key = f"{TEST_PREFIX}/sample-{uuid.uuid4()}.pdf"
+    client.put_object(settings.minio_bucket_corpus, key, BytesIO(pdf_bytes), length=len(pdf_bytes))
+
+    with engine.begin() as conn:
+        sd_id = conn.execute(
+            text(
+                "INSERT INTO sub_districts (name_th, district_th, province_th) VALUES "
+                "('ตำบลทดสอบไฟล์', 'อำเภอทดสอบ', 'จังหวัดทดสอบ') RETURNING id"
+            )
+        ).scalar_one()
+        pid = conn.execute(
+            text(
+                "INSERT INTO projects (sub_district_id, name_th, fiscal_year, budget_total) "
+                "VALUES (:sd, 'โครงการทดสอบไฟล์', 2569, 500000) RETURNING id"
+            ),
+            {"sd": sd_id},
+        ).scalar_one()
+        doc_id = conn.execute(
+            text(
+                "INSERT INTO documents (project_id, minio_key, filename, doc_type, source, "
+                "parse_status, scope) VALUES (:p, :k, 'sample.pdf', 'contract_summary', "
+                "'BORN_DIGITAL', 'COMPLETED', 'PROJECT') RETURNING id"
+            ),
+            {"p": pid, "k": key},
+        ).scalar_one()
+
+    yield doc_id
+
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM sub_districts WHERE id = :id"), {"id": sd_id})
+    client.remove_object(settings.minio_bucket_corpus, key)
+
+
 @pytest.fixture(scope="session")
 def seeded(engine):
     """Two fiscal years of one throwaway sub-district: projects, bids,

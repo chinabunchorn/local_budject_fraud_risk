@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api import auth, dashboard, projects, references
+from app.api import auth, dashboard, documents, projects, references
 from app.core.settings import get_settings
 from app.db.session import get_engine
 
@@ -39,7 +39,14 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    for router in (auth.router, dashboard.router, projects.router, references.router):
+    routers = (
+        auth.router,
+        dashboard.router,
+        projects.router,
+        references.router,
+        documents.router,
+    )
+    for router in routers:
         app.include_router(router, prefix="/api")
 
     @app.get("/api/health")

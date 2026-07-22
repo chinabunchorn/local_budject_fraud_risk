@@ -37,6 +37,19 @@ class Settings(BaseSettings):
     dashboard_cache_ttl_seconds: int = Field(
         default=300, validation_alias="DASHBOARD_CACHE_TTL_SECONDS"
     )
+    # Bare host:port (no scheme), matching pipelines/common/settings.py's
+    # PIPELINES_MINIO_ENDPOINT convention — the compose-internal MINIO_ENDPOINT
+    # (http://minio:9000) is a different shape and not read here.
+    minio_endpoint: str = Field(
+        default="localhost:9000", validation_alias="BACKEND_MINIO_ENDPOINT"
+    )
+    minio_access_key: str = Field(
+        default="mission3-minio", validation_alias="MINIO_ROOT_USER"
+    )
+    minio_secret_key: str = Field(
+        default="change-me-minio", validation_alias="MINIO_ROOT_PASSWORD"
+    )
+    minio_bucket_corpus: str = Field(default="corpus", validation_alias="MINIO_BUCKET_CORPUS")
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -21,6 +21,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   api,
+  API_BASE,
   type ChunkOut,
   type Citation,
   type FeedbackOut,
@@ -55,8 +56,8 @@ function dedupeByChunk(citations: Citation[]): Citation[] {
 /**
  * Evidence, shown inline under the reasoning step it supports — the source
  * document name and excerpt are visible without a click, so an auditor can
- * check a cited budget figure directly against the document. "View full
- * text" still opens the dialog for the complete, scrollable passage.
+ * check a cited budget figure directly against the document. "Open the
+ * source PDF" opens the real document, jumped to the cited page.
  */
 function EvidenceCard({
   citation,
@@ -65,7 +66,7 @@ function EvidenceCard({
 }: {
   citation: Citation;
   chunk: ChunkOut | null | undefined;
-  onOpenFull: (chunkId: string) => void;
+  onOpenFull: (citation: Citation, chunk: ChunkOut | null | undefined) => void;
 }) {
   const page = citation.page ?? chunk?.page ?? null;
   return (
@@ -98,13 +99,101 @@ function EvidenceCard({
       {chunk ? (
         <button
           type="button"
-          onClick={() => onOpenFull(citation.chunk_id)}
-          className="mt-1.5 text-xs font-medium text-primary hover:underline"
+          onClick={() => onOpenFull(citation, chunk)}
+          className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
         >
-          ดูข้อความฉบับเต็ม
+          เปิดดูเอกสารต้นฉบับ (PDF){page ? ` · หน้า ${page}` : ""}
         </button>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The citation viewer: renders the real source PDF — not just the extracted
+ * chunk text — jumped to the cited page via the `#page=N` fragment that
+ * browsers' built-in PDF viewers honor. A plain `<iframe src>` can't carry an
+ * Authorization header, so the file is fetched as a blob first and the
+ * fragment is applied to that blob: URL.
+ */
+function DocumentViewerDialog({
+  open,
+  onOpenChange,
+  documentId,
+  filename,
+  page,
+  token,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  documentId: string | null;
+  filename: string | null;
+  page: number | null;
+  token: string | null;
+}) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || !documentId || !token) return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    Promise.resolve()
+      .then(() => {
+        if (cancelled) return null;
+        setBlobUrl(null);
+        setError(null);
+        return fetch(`${API_BASE}/documents/${documentId}/file`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      })
+      .then((res) => {
+        if (!res || cancelled) return null;
+        if (!res.ok) throw new Error("โหลดเอกสารไม่สำเร็จ");
+        return res.blob();
+      })
+      .then((blob) => {
+        if (cancelled || !blob) return;
+        objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setError("ไม่สามารถโหลดเอกสารต้นฉบับได้ในขณะนี้");
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [open, documentId, token]);
+
+  const src = blobUrl ? `${blobUrl}#page=${page ?? 1}` : null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>เอกสารต้นฉบับ</DialogTitle>
+          <DialogDescription>
+            {filename ?? "กำลังโหลด…"}
+            {page ? ` · เปิดที่หน้า ${page}` : ""}
+          </DialogDescription>
+        </DialogHeader>
+        {error ? (
+          <p className="text-sm text-destructive">{error}</p>
+        ) : src ? (
+          <iframe
+            key={src}
+            src={src}
+            title={`เอกสารต้นฉบับ: ${filename ?? ""}`}
+            className="h-[75vh] w-full rounded-md border border-border bg-muted/20"
+          />
+        ) : (
+          <div className="flex h-[75vh] items-center justify-center text-sm text-muted-foreground">
+            กำลังโหลดเอกสาร…
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -116,8 +205,10 @@ export default function ProjectDetailPage() {
     `/projects/${id}/feedback`,
   );
 
-  const [chunk, setChunk] = useState<ChunkOut | null>(null);
-  const [chunkOpen, setChunkOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerDocId, setViewerDocId] = useState<string | null>(null);
+  const [viewerFilename, setViewerFilename] = useState<string | null>(null);
+  const [viewerPage, setViewerPage] = useState<number | null>(null);
   const [regulation, setRegulation] = useState<RegulationOut | null>(null);
   const [regOpen, setRegOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
@@ -158,22 +249,17 @@ export default function ProjectDetailPage() {
     };
   }, [data, token, chunkById]);
 
-  async function openChunk(chunkId: string) {
-    const cached = chunkById[chunkId];
-    if (cached) {
-      setChunk(cached);
-      setChunkOpen(true);
-      return;
-    }
-    setChunk(null);
-    setChunkOpen(true);
-    try {
-      const c = await api<ChunkOut>(`/chunks/${chunkId}`, token);
-      setChunk(c);
-      setChunkById((prev) => ({ ...prev, [chunkId]: c }));
-    } catch {
-      setChunkOpen(false);
-    }
+  /** Opens the citation viewer on the real source PDF, jumped to the cited
+   * page. `document_id` normally comes straight off the citation; the cached
+   * chunk (already resolved for the inline excerpt) is a fallback in case a
+   * citation predates that field being populated. */
+  function openDocumentViewer(citation: Citation, chunk: ChunkOut | null | undefined) {
+    const docId = citation.document_id ?? chunk?.document.id ?? null;
+    if (!docId) return;
+    setViewerDocId(docId);
+    setViewerFilename(chunk?.document.filename ?? null);
+    setViewerPage(citation.page ?? chunk?.page ?? null);
+    setViewerOpen(true);
   }
 
   async function openRegulation(code: string) {
@@ -396,7 +482,7 @@ export default function ProjectDetailPage() {
                                 key={ci}
                                 citation={c}
                                 chunk={chunkById[c.chunk_id]}
-                                onOpenFull={openChunk}
+                                onOpenFull={openDocumentViewer}
                               />
                             ))}
                           </div>
@@ -416,7 +502,7 @@ export default function ProjectDetailPage() {
                           key={c.chunk_id}
                           citation={c}
                           chunk={chunkById[c.chunk_id]}
-                          onOpenFull={openChunk}
+                          onOpenFull={openDocumentViewer}
                         />
                       ))}
                     </div>
@@ -606,23 +692,14 @@ export default function ProjectDetailPage() {
         </ul>
       </section>
 
-      <Dialog open={chunkOpen} onOpenChange={setChunkOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>ข้อความต้นทางจากเอกสาร</DialogTitle>
-            <DialogDescription>
-              {chunk
-                ? `${chunk.document.filename}${chunk.page ? ` · หน้า ${chunk.page}` : ""} · ${chunk.document.doc_type ?? chunk.document.scope}`
-                : "กำลังโหลด…"}
-            </DialogDescription>
-          </DialogHeader>
-          {chunk ? (
-            <div className="max-h-96 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted/40 px-4 py-3 text-sm leading-relaxed">
-              {chunk.text}
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      <DocumentViewerDialog
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        documentId={viewerDocId}
+        filename={viewerFilename}
+        page={viewerPage}
+        token={token}
+      />
 
       <Dialog open={regOpen} onOpenChange={setRegOpen}>
         <DialogContent className="max-w-2xl">

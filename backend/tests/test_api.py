@@ -192,3 +192,27 @@ async def test_feedback_capture_and_list(client, auth_headers, seeded):
     )
     assert resp.status_code == 200
     assert any("ราคากลาง" in f["text_th"] for f in resp.json())
+
+
+# ---- citation viewer: real source PDF -------------------------------------------
+
+
+async def test_document_file_serves_real_pdf(client, auth_headers, document_with_file):
+    resp = await client.get(f"/api/documents/{document_with_file}/file", headers=auth_headers)
+    assert resp.status_code == 200
+    # Forced explicitly by the endpoint — the object is stored as
+    # application/octet-stream (verified against the real bucket).
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.content.startswith(b"%PDF-")
+
+
+async def test_document_file_404_for_unknown_document(client, auth_headers):
+    resp = await client.get(
+        "/api/documents/00000000-0000-0000-0000-000000000000/file", headers=auth_headers
+    )
+    assert resp.status_code == 404
+
+
+async def test_document_file_requires_auth(client, document_with_file):
+    resp = await client.get(f"/api/documents/{document_with_file}/file")
+    assert resp.status_code == 401
