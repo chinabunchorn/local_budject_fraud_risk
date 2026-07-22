@@ -170,7 +170,7 @@ function DocumentViewerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="flex h-[92vh] w-[95vw] max-w-6xl flex-col sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle>เอกสารต้นฉบับ</DialogTitle>
           <DialogDescription>
@@ -185,10 +185,10 @@ function DocumentViewerDialog({
             key={src}
             src={src}
             title={`เอกสารต้นฉบับ: ${filename ?? ""}`}
-            className="h-[75vh] w-full rounded-md border border-border bg-muted/20"
+            className="min-h-0 w-full flex-1 rounded-md border border-border bg-muted/20"
           />
         ) : (
-          <div className="flex h-[75vh] items-center justify-center text-sm text-muted-foreground">
+          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
             กำลังโหลดเอกสาร…
           </div>
         )}
@@ -702,7 +702,7 @@ export default function ProjectDetailPage() {
       />
 
       <Dialog open={regOpen} onOpenChange={setRegOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {regulation
