@@ -197,7 +197,7 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
    until calibration), banded `risk_level` with a HIGH-severity pre-check forcing
    REQUIRES_INVESTIGATION (verdict is code, not the LLM's free choice), templated non-accusatory
    `summary_th`. Model citations/regulation refs are filtered to what was actually offered
-   (hallucinations dropped, not rejected) → guardrails stage (sole write path). Verified against
+   (hallucinations dropped, not rejected) → guardrails stage (sole write path). Verified againstz
    a stub end-to-end + live per-factor calls (parse, token budget ~5.1k+0.8k/8192, citations).
    **Live serving realities (verified, differ from repo assumptions):** the container is vLLM
    **0.9.2** (not 0.11.0); served alias is `typhoon-chat` (decoupled from provenance `model_id`
@@ -265,3 +265,57 @@ behavior confirmed. All accounts/partitions/paths/gotchas: `hpc/LANTA_CONFIG_NOT
    `docs/runbooks/demo_dashboard.md` (bring-up, 5-min demo script, drill procedure +
    recorded result, open pseudonymization decision). Phase 3 COMPLETE → Phase 4
    (live RAG chatbot through the tunnel).
+4. DONE (post-Phase-3 mentor-feedback round, 2026-07-22) — the drill-down's evidence
+   display went through two more rounds driven by real feedback, both verified live
+   against the real corpus, not just built:
+   - **Inline evidence, not blind citations.** Mentor feedback: an auditor had to
+     click a generic "อ้างอิง N" button per citation before learning which document or
+     what it said — too slow for checking a budget figure. Checked the real data
+     first: all 68 real citations across the corpus sit on `RiskFactor.citations`,
+     never on individual `reasoning_steps` (verified 0 step-level citations across
+     all 20 projects × 5 factors × 3 steps), so the fix landed at the factor level —
+     each factor's reasoning now ends with a "หลักฐานเอกสารประกอบปัจจัยนี้" block
+     showing the source filename, page, doc type, and a clamped inline excerpt with
+     zero clicks required.
+   - **Real PDF citation viewer, jumped to the cited page.** Follow-up ask: show the
+     actual source PDF, not extracted text. New `GET /api/documents/{id}/file`
+     (`backend/app/api/documents.py` + `app/services/storage.py`) streams the object
+     straight from MinIO through the app — verified the real bucket stores every
+     object as `application/octet-stream` (fput_object's default), so the endpoint
+     forces `media_type="application/pdf"` rather than trust stored metadata. MinIO
+     stays fully internal; the frontend fetches with the JWT (a plain `<iframe src>`
+     can't carry an Authorization header), turns the response into a `blob:` URL, and
+     opens it with a `#page=N` fragment — the open-parameter convention Chromium/
+     Firefox/Safari's built-in PDF viewers already honor, so no PDF-rendering library
+     was needed. `docker-compose.yml` backend service now depends on `minio`
+     (service_healthy) and gets `BACKEND_MINIO_ENDPOINT` (bare host:port, mirrors
+     `pipelines/common/settings.py`'s `PIPELINES_MINIO_ENDPOINT` convention) +
+     `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`/`MINIO_BUCKET_CORPUS`. 3 new backend
+     tests incl. a fixture that uploads a real tiny PDF to the corpus bucket and
+     round-trips it through the endpoint.
+   - **Dialog width bug, not a preference.** "Modal feels small" turned out to be a
+     real bug, not a sizing choice: shadcn's base `DialogContent` ships a default
+     `sm:max-w-sm` (24rem) that silently beat a plain `max-w-6xl` override in the CSS
+     cascade at any viewport ≥640px (`tailwind-merge` only dedupes within the same
+     responsive-variant group, so an unprefixed override never collides with the
+     base's `sm:`-prefixed one — both ship, and the `sm:` rule wins the cascade).
+     Measured with Playwright before/after: 384px → 1152px on a 1440×1100 viewport.
+     Fix is to always override with the matching `sm:` prefix; the regulation-text
+     dialog had the identical latent bug and got the same fix.
+   - **Every project needs a PDF entry point, even with zero citations.** Reported
+     against จ้างเหมาซ่อมแซมถนนลูกรัง หมู่ ๑ บ้านเขาคีรี showing no evidence at all.
+     Root cause verified against live data: 5 of the 20 real projects have zero
+     citations across every factor (the guardrails stage drops any citation the
+     model offered that didn't resolve to a real chunk — real Phase-G output, not a
+     frontend bug) — but all 20 projects have ≥1 real document attached, and that
+     document list wasn't clickable anywhere. Fix: the "เอกสารประกอบ" list is now
+     clickable on every project (opens the real PDF, defaults to page 1), and any
+     factor with zero citations ends with a labeled fallback pointing at the
+     project's real documents instead of showing nothing. Never fabricates a
+     citation or a page — only ever opens documents genuinely attached to the
+     project. Swept all 20 real projects headlessly after the fix: every one has
+     ≥1 clickable PDF entry point, zero console errors project-wide; the star demo
+     project's real citations are unaffected (still 7/7 on the original check).
+   Commits (branch `feat/phase3-dashboard`): `f5dc363` (inline evidence), `ddf17d7`
+   (PDF viewer), `3a350f5` (dialog sizing), `fde8dac` (universal PDF entry point).
+   22/22 backend tests, frontend build clean throughout.
