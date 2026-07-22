@@ -121,7 +121,21 @@ mission3/
 - Python 3.11+, fully type-hinted, ruff + pytest; TypeScript strict mode. Thai prompt templates
   live in `pipelines/prompts/` as versioned files.
 
-## Current status & next tasks (see docs/ROADMAP.md — Phases 0–1 DONE, we are at Phase 2)
+## Current status & next tasks (see docs/ROADMAP.md — Phases 0–3 DONE incl. exit gates; next: Phase 4 live RAG chatbot)
+
+**Where we are (2026-07-22):** Phase 2 (ingestion + structured extraction + real
+Typhoon-2.5 risk scoring, 22 projects) and Phase 3 (offline-first dashboard: FastAPI
+read API + Next.js UI, exit gate met with LANTA fully offline) are COMPLETE, plus two
+post-Phase-3 rounds driven by mentor feedback: the evidence-first citation viewer
+(inline excerpts → real source PDFs opened at the cited page, every project guaranteed
+a PDF entry point) and item-level anomaly detection (`/budget-items` — unit-price YoY
+spikes, vendor locks, curated standard-price comparison; MVP: the หัวเขา 2,000L water
+tanks, +51.1%/unit, same single-bidder shop 2 years). Everything user-facing reads
+pre-computed, document-cited data — no LLM call anywhere in the dashboard path.
+**Next:** Phase 4 (LangGraph RAG chatbot through the tunnel, needs a LANTA demo
+window) + re-run `score_risk` at that window so the 2 new tank projects get their
+guardrails-validated risk results (flow resumes over unscored projects). Details of
+every phase below.
 
 **Done (July 2026).** Repo scaffolded and merged (PR #2); app-zone `docker-compose` verified
 healthy end-to-end (all 9 services, Thai embedding + rerank probes pass); `shared/schemas`
