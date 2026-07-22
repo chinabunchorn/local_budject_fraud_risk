@@ -30,15 +30,23 @@ REPLACEMENT_CHARS = "REPLACEMENT_CHARS"
 MOJIBAKE = "MOJIBAKE"
 BROKEN_COMBINING = "BROKEN_COMBINING"
 UNRECOGNIZED_THAI = "UNRECOGNIZED_THAI"
+LOW_THAI_RATIO = "LOW_THAI_RATIO"
 
-# ---- tunable thresholds (quality-gate these on the real corpus) ----
+# ---- tunable thresholds (quality-gated on the real corpus, 2026-07-12) ----
 MIN_TEXT_CHARS = 40  # below this a page is treated as having no text layer
 MOJIBAKE_RATIO_MAX = 0.05
 ORPHAN_RATIO_MAX = 0.02
 DICT_COVERAGE_MIN = 0.50
 DICT_MIN_THAI_CHARS = 30  # don't judge dictionary coverage on tiny samples
+# Legacy-font text layers map Thai glyphs to LATIN codepoints — a substantial
+# page with almost no Thai letters is broken, not English (this corpus has no
+# English documents). Caught red-handed by the Phase-D gate on a real TOR.
+THAI_LETTER_RATIO_MIN = 0.20
+RATIO_MIN_LETTERS = 30  # don't judge the ratio on tiny samples (was 80; a real
+# TOR had a 46-char all-Latin residue page that must still route to OCR)
 
 _THAI = re.compile(r"[ก-๛]")
+_LATIN_LETTER = re.compile(r"[A-Za-zÀ-ÿ]")
 # Latin-1 supplement letters — the signature of UTF-8/TIS-620 misdecoding
 _MOJIBAKE = re.compile(r"[À-ÿ]")
 _COMBINING = re.compile(r"[ัิ-ฺ็-๎]")
@@ -63,6 +71,7 @@ class GarbleReport:
     mojibake_ratio: float
     orphan_ratio: float
     dict_coverage: float | None  # None when too little Thai text to judge
+    thai_letter_ratio: float | None = None  # None when too few letters to judge
     reasons: list[str] = field(default_factory=list)
 
     @property
@@ -99,7 +108,7 @@ def decide_page(text: str) -> GarbleReport:
     reasons: list[str] = []
 
     if n < MIN_TEXT_CHARS:
-        return GarbleReport(n, thai_chars, 0.0, 0.0, None, [NO_TEXT_LAYER])
+        return GarbleReport(n, thai_chars, 0.0, 0.0, None, None, [NO_TEXT_LAYER])
 
     if "�" in stripped:
         reasons.append(REPLACEMENT_CHARS)
@@ -116,4 +125,11 @@ def decide_page(text: str) -> GarbleReport:
     if dict_coverage is not None and dict_coverage < DICT_COVERAGE_MIN:
         reasons.append(UNRECOGNIZED_THAI)
 
-    return GarbleReport(n, thai_chars, mojibake_ratio, orphan_ratio, dict_coverage, reasons)
+    letters = thai_chars + len(_LATIN_LETTER.findall(stripped))
+    thai_letter_ratio = thai_chars / letters if letters >= RATIO_MIN_LETTERS else None
+    if thai_letter_ratio is not None and thai_letter_ratio < THAI_LETTER_RATIO_MIN:
+        reasons.append(LOW_THAI_RATIO)
+
+    return GarbleReport(
+        n, thai_chars, mojibake_ratio, orphan_ratio, dict_coverage, thai_letter_ratio, reasons
+    )

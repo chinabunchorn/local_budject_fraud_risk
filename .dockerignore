@@ -1,0 +1,13 @@
+# The backend image build uses the repo root as context (see backend/Dockerfile)
+# so ../shared resolves. Keep the context tiny — and NEVER ship the real corpus,
+# secrets, or local venvs into a build context.
+*
+!shared/
+!backend/
+shared/.venv/
+shared/tests/
+backend/.venv/
+backend/tests/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/

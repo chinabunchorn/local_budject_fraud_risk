@@ -1,0 +1,14 @@
+# Curated standard reference prices (ราคามาตรฐาน).
+#
+# The source books (เอกสารกลาง) are scans — NEEDS_OCR by standing decision —
+# so these rows are entered BY THE DATA TEAM from the cited page, and every
+# row must cite the reference document (MinIO key) + page so the auditor can
+# open the actual scanned page in the PDF viewer and verify the number with
+# their own eyes. provenance=CURATED is recorded on every row; switch to
+# EXTRACTED only after a verified OCR pass reproduces the same value.
+- item_key: water-tank-plastic-2000l
+  description_th: ถังน้ำ แบบพลาสติก ขนาดความจุ 2,000 ลิตร (ราคามาตรฐานครุภัณฑ์ สำนักงบประมาณ)
+  standard_unit_price: 7000
+  fiscal_year: 2568
+  source_minio_key: reference/สำนักงบประมาณ/ราคามาตรฐานครุภัณฑ์/ราคามาตรฐานครุภัณฑ์.pdf
+  source_page: 2

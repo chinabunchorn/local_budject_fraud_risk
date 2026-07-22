@@ -101,6 +101,15 @@ Then `curl http://localhost:8000/v1/models` from the local machine reaches the L
 - Pages resized to ~1800px on the long edge before OCR (matches the model's training resolution).
 - **Verified on real data:** a real 33-page เทศบาลตำบลท่าช้าง financial report (scanned, zero embedded text layer) processed cleanly in a single job — correctly extracted complex Thai financial tables, exact baht figures, and signature blocks. Full pipeline validated end-to-end on production-representative input, not just synthetic test images.
 
+### Deployed batch job (July 2026) — the contract the app side codes against
+
+- `slurm/ocr_batch.sbatch` (in `chin/`) — the script `python -m hpc_io.ocr_batch submit` runs. Driver: `chin/batch_ocr.py`.
+- **Contract:** input = every `*.pdf` in `chin/documents/` (non-PDFs ignored); output = `chin/ocr_results/<pdf-stem>/page_<n>.md`, `n` = 1-based PDF page number, UTF-8 markdown. Ingestion pass 2 (`pipelines/flows/ingest_documents.py`) parses exactly this naming.
+- **Runtime: plain `transformers` (`AutoModelForImageTextToText`) in the `hf` mamba env — NOT vLLM, NOT Apptainer.** This is the only combination verified on real data; vLLM touched the OCR model only in a separate persistent-server test on one small synthetic image. Decision: keep the proven path; migrating to vLLM-offline-in-Apptainer (untested with Qwen3-VL + rendered pages) requires re-running the full OCR acceptance test first, and only makes sense if OCR throughput or mamba-env maintenance becomes a problem.
+- Idempotent: stems with all pages present are skipped BEFORE model load (a no-op run exits in seconds, GPU untouched). Per-document failure isolation; job exits non-zero if any document failed; per-page progress in the Slurm log. Model loads once per job.
+- `ocr_results/` was cleaned of pre-contract test artifacts — safe for `fetch` to pull wholesale.
+- TODO: copy the final `ocr_batch.sbatch` + `batch_ocr.py` from LANTA back into the repo's `hpc/slurm/` (attended scp; needs a 2FA session).
+
 ## Kill-and-Recovery
 
 Tested (accidentally, then deliberately): the `gpu-devel` partition's 2-hour walltime cap killed the persistent chat server mid-session. Confirmed this matches the intended "graceful degradation" behavior — the tunnel simply stops responding, nothing else breaks (the OCR batch job running independently on the same node was unaffected). Recovery is a manual `sbatch` resubmit + re-checking `current_node.txt` + reopening the tunnel if the node changed.

@@ -32,7 +32,7 @@ from sqlalchemy import create_engine, text
 
 from common.chunker import chunk_pages
 from common.garbled import NO_TEXT_LAYER, decide_page
-from common.manifest import ManifestSubDistrict, parse_manifest
+from common.manifest import Manifest, ManifestDocument, parse_manifest
 from common.settings import (
     corpus_bucket,
     database_url,
@@ -62,7 +62,9 @@ def _minio_client() -> Minio:
 class DocumentPlan:
     minio_key: str
     doc_type: str | None
-    project_id: str
+    scope: str  # PROJECT | SUB_DISTRICT | REFERENCE (migration 0003)
+    project_id: str | None = None
+    sub_district_id: str | None = None
 
 
 @task
@@ -71,11 +73,14 @@ def load_catalog() -> list[DocumentPlan]:
     engine = create_engine(database_url())
     client = _minio_client()
     raw = client.get_object(corpus_bucket(), MANIFEST_KEY).read().decode("utf-8")
-    sub_districts: list[ManifestSubDistrict] = parse_manifest(raw)
+    manifest: Manifest = parse_manifest(raw)
 
-    plans: list[DocumentPlan] = []
+    def plan(doc: ManifestDocument, scope: str, **owner: str) -> DocumentPlan:
+        return DocumentPlan(doc.key, doc.doc_type, scope, **owner)
+
+    plans = [plan(doc, "REFERENCE") for doc in manifest.reference_documents]
     with engine.begin() as conn:
-        for sd in sub_districts:
+        for sd in manifest.sub_districts:
             sd_id = conn.execute(
                 text(
                     """
@@ -88,7 +93,13 @@ def load_catalog() -> list[DocumentPlan]:
                 ),
                 {"name": sd.name_th, "district": sd.district_th, "province": sd.province_th},
             ).scalar_one()
+            plans.extend(
+                plan(doc, "SUB_DISTRICT", sub_district_id=str(sd_id))
+                for doc in sd.budget_reports
+            )
             for proj in sd.projects:
+                # COALESCE: a manifest without budget/category must never
+                # null-out values later filled by structured extraction
                 project_id = conn.execute(
                     text(
                         """
@@ -97,8 +108,8 @@ def load_catalog() -> list[DocumentPlan]:
                         VALUES (:sd, :name, :fy, :cat, :budget)
                         ON CONFLICT ON CONSTRAINT uq_projects_natural_key
                         DO UPDATE SET
-                            category_th = EXCLUDED.category_th,
-                            budget_total = EXCLUDED.budget_total
+                            category_th = COALESCE(EXCLUDED.category_th, projects.category_th),
+                            budget_total = COALESCE(EXCLUDED.budget_total, projects.budget_total)
                         RETURNING id
                         """
                     ),
@@ -111,7 +122,7 @@ def load_catalog() -> list[DocumentPlan]:
                     },
                 ).scalar_one()
                 plans.extend(
-                    DocumentPlan(doc.key, doc.doc_type, str(project_id))
+                    plan(doc, "PROJECT", project_id=str(project_id))
                     for doc in proj.documents
                 )
     engine.dispose()
@@ -155,25 +166,71 @@ def _process_document(
     pdf_bytes = client.get_object(corpus_bucket(), plan.minio_key).read()
     sha = hashlib.sha256(pdf_bytes).hexdigest()
     filename = plan.minio_key.rsplit("/", 1)[-1]
-    stem = filename.rsplit(".", 1)[0]
+    # Basenames collide across projects (every project has a contract_summary.pdf),
+    # and LANTA's documents/ staging dir is flat — the outbox name (and therefore
+    # the ocr_results/<stem>/ result dir) must be unique per document content.
+    outbox_name = f"{sha[:12]}_{filename}"
+    outbox_stem = outbox_name.rsplit(".", 1)[0]
 
+    full_scan_pages: list[str] | None = None
     with engine.begin() as conn:
         existing = conn.execute(
             text(
-                "SELECT id, content_sha256, parse_status FROM documents "
+                "SELECT id, content_sha256, parse_status, page_count FROM documents "
                 "WHERE minio_key = :key"
             ),
             {"key": plan.minio_key},
         ).one_or_none()
-        if existing and existing.content_sha256 == sha and existing.parse_status == "COMPLETED":
-            return "skipped"
+        if existing and existing.content_sha256 == sha:
+            if existing.parse_status == "COMPLETED":
+                return "skipped"
+            if existing.parse_status in ("NEEDS_OCR", "PENDING"):
+                # PENDING happens when a previous run was killed mid-document —
+                # the outbox entry (if sha still matches) remains authoritative
+                ocr_pages = (
+                    _load_ocr_pages(ocr_results_dir, outbox_stem) if ocr_results_dir else {}
+                )
+                manifest_path = outbox_dir / "outbox.json"
+                entry = (
+                    json.loads(manifest_path.read_text()).get(outbox_name, {})
+                    if manifest_path.exists()
+                    else {}
+                )
+                if entry.get("sha256") == sha:
+                    needed = set(entry.get("pages_needing_ocr", []))
+                    if not needed <= set(ocr_pages):
+                        # cheap resume: already extracted, outbox already holds
+                        # the PDF, and OCR results are absent or partial (LANTA
+                        # page-level resume fetches can be) — don't re-run
+                        # Docling until every needed page is available
+                        logger.info(
+                            "%s: still awaiting OCR (%d/%d needed pages fetched)",
+                            plan.minio_key,
+                            len(needed & set(ocr_pages)),
+                            len(needed),
+                        )
+                        return "needs_ocr"
+                    total = existing.page_count or 0
+                    if (
+                        total
+                        and len(entry.get("pages_needing_ocr", [])) == total
+                        and set(range(1, total + 1)) <= set(ocr_pages)
+                    ):
+                        # fully-scanned doc with complete OCR results: every
+                        # word comes from Typhoon-OCR — Docling adds nothing
+                        # and its table model grinds for ages on dense scans
+                        full_scan_pages = [ocr_pages[n] for n in range(1, total + 1)]
         document_id = conn.execute(
             text(
                 """
-                INSERT INTO documents (project_id, minio_key, filename, doc_type, content_sha256)
-                VALUES (:project, :key, :filename, :doc_type, :sha)
+                INSERT INTO documents
+                    (project_id, sub_district_id, scope, minio_key, filename,
+                     doc_type, content_sha256)
+                VALUES (:project, :sub_district, :scope, :key, :filename, :doc_type, :sha)
                 ON CONFLICT (minio_key) DO UPDATE SET
                     project_id = EXCLUDED.project_id,
+                    sub_district_id = EXCLUDED.sub_district_id,
+                    scope = EXCLUDED.scope,
                     doc_type = EXCLUDED.doc_type,
                     content_sha256 = EXCLUDED.content_sha256,
                     parse_status = 'PENDING'
@@ -182,6 +239,8 @@ def _process_document(
             ),
             {
                 "project": plan.project_id,
+                "sub_district": plan.sub_district_id,
+                "scope": plan.scope,
                 "key": plan.minio_key,
                 "filename": filename,
                 "doc_type": plan.doc_type,
@@ -189,25 +248,35 @@ def _process_document(
             },
         ).scalar_one()
 
-    with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:
-        tmp.write(pdf_bytes)
-        tmp.flush()
-        pages = extractor(Path(tmp.name))
+    if full_scan_pages is not None:
+        pages = full_scan_pages
+        reports = []
+        garbled = set(range(1, len(pages) + 1))
+        source = "SCANNED"
+        unresolved: set[int] = set()
+        ocr_pages = dict(enumerate(pages, start=1))
+    else:
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:
+            tmp.write(pdf_bytes)
+            tmp.flush()
+            pages = extractor(Path(tmp.name))
 
-    reports = [decide_page(page) for page in pages]
-    garbled = {no for no, report in enumerate(reports, start=1) if report.needs_ocr}
-    scanned = sum(1 for r in reports if NO_TEXT_LAYER in r.reasons) >= max(1, len(pages) // 2)
-    source = "SCANNED" if scanned else "BORN_DIGITAL"
+        reports = [decide_page(page) for page in pages]
+        garbled = {no for no, report in enumerate(reports, start=1) if report.needs_ocr}
+        scanned = (
+            sum(1 for r in reports if NO_TEXT_LAYER in r.reasons) >= max(1, len(pages) // 2)
+        )
+        source = "SCANNED" if scanned else "BORN_DIGITAL"
 
-    ocr_pages = _load_ocr_pages(ocr_results_dir, stem) if ocr_results_dir else {}
-    unresolved = garbled - set(ocr_pages)
+        ocr_pages = _load_ocr_pages(ocr_results_dir, outbox_stem) if ocr_results_dir else {}
+        unresolved = garbled - set(ocr_pages)
 
     if unresolved:
         outbox_dir.mkdir(parents=True, exist_ok=True)
-        (outbox_dir / filename).write_bytes(pdf_bytes)
+        (outbox_dir / outbox_name).write_bytes(pdf_bytes)
         manifest_path = outbox_dir / "outbox.json"
         entries = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
-        entries[filename] = {
+        entries[outbox_name] = {
             "minio_key": plan.minio_key,
             "sha256": sha,
             "pages_needing_ocr": sorted(unresolved),
@@ -283,6 +352,9 @@ def ingest_documents(
 ) -> dict[str, int]:
     logger = get_run_logger()
     plans = load_catalog()
+    # project documents are the product — the giant scanned reference books
+    # (เอกสารกลาง, ~100 pages each through Docling) must never starve them
+    plans.sort(key=lambda p: {"PROJECT": 0, "SUB_DISTRICT": 1, "REFERENCE": 2}[p.scope])
     tally: dict[str, int] = {"completed": 0, "needs_ocr": 0, "skipped": 0}
     for plan in plans:
         outcome = process_document(

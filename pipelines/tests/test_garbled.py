@@ -2,6 +2,7 @@
 
 from common.garbled import (
     BROKEN_COMBINING,
+    LOW_THAI_RATIO,
     MOJIBAKE,
     NO_TEXT_LAYER,
     REPLACEMENT_CHARS,
@@ -61,3 +62,21 @@ class TestFailureModes:
         report = decide_page("x" * 50 + " กข")
         assert report.dict_coverage is None
         assert UNRECOGNIZED_THAI not in report.reasons
+
+    def test_legacy_font_latin_mapped_layer_flagged(self):
+        """Caught by the Phase-D gate on a real TOR: Thai glyphs extracted as
+        LATIN junk — substantial page, near-zero Thai letters."""
+        junk = "hunununing uinnwa nin inualns namnauaaueiunuuunuay mmto ushaad " * 4
+        report = decide_page(junk)
+        assert LOW_THAI_RATIO in report.reasons
+        assert report.thai_letter_ratio == 0.0
+
+    def test_mostly_thai_with_some_english_terms_passes(self):
+        # real docs mix in terms like "e-bidding" — must not trip the ratio
+        report = decide_page(CLEAN + " ด้วยวิธีประกวดราคาอิเล็กทรอนิกส์ (e-bidding) Factor F")
+        assert LOW_THAI_RATIO not in report.reasons
+
+    def test_short_mixed_text_not_judged_by_ratio(self):
+        report = decide_page("PDF page 7 of 12 - รวม 12,500 บาท")
+        assert report.thai_letter_ratio is None
+        assert LOW_THAI_RATIO not in report.reasons
