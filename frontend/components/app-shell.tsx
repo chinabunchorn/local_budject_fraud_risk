@@ -17,6 +17,7 @@ const NAV = [
   { href: "/projects", label: "โครงการ" },
   { href: "/budget-items", label: "สรุปการจัดซื้อ" },
   { href: "/trends", label: "แนวโน้ม" },
+  { href: "/chat", label: "ถาม-ตอบเอกสาร" },
 ];
 
 const ROLE_TH: Record<string, string> = {
@@ -115,8 +116,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <footer className="border-t border-border bg-white">
         <p className="mx-auto w-full max-w-6xl px-6 py-4 text-xs text-muted-foreground">
-          ข้อมูลจากเอกสารจัดซื้อจัดจ้างและงบประมาณที่ผ่านการประมวลผลล่วงหน้า —
-          ระบบไม่เรียกใช้แบบจำลองภาษาระหว่างการแสดงผล
+          {pathname.startsWith("/chat")
+            ? "หน้าถาม-ตอบเป็นฟีเจอร์เดียวที่เรียกใช้แบบจำลองภาษาแบบสด ผ่านการเชื่อมต่อเฉพาะช่วงสาธิต — " +
+              "คำตอบทุกข้อมีการอ้างอิงแหล่งที่มาที่เปิดตรวจได้"
+            : "ข้อมูลจากเอกสารจัดซื้อจัดจ้างและงบประมาณที่ผ่านการประมวลผลล่วงหน้า — " +
+              "ระบบไม่เรียกใช้แบบจำลองภาษาระหว่างการแสดงผล"}
         </p>
       </footer>
     </div>

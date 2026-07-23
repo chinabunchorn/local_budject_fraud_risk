@@ -187,7 +187,23 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET_CORPUS: ${MINIO_BUCKET_CORPUS}
+      # Phase 4 live RAG chatbot. TEI runs in this compose network; the vLLM
+      # tunnel's local port lives on the HOST (app VM), reached via host-gateway.
+      BACKEND_TEI_EMBED_URL: http://tei-embed:80
+      BACKEND_TEI_RERANK_URL: http://tei-rerank:80
+      # Fixed to host-gateway (NOT ${VLLM_BASE_URL}): the containerized backend
+      # always reaches the tunnel via the host, whereas .env's VLLM_BASE_URL
+      # (127.0.0.1) is for host-run pipelines — different loopback, same var name.
+      VLLM_BASE_URL: http://host.docker.internal:8000/v1
+      VLLM_SERVED_MODEL: ${VLLM_SERVED_MODEL:-typhoon-chat}
+      VLLM_MODEL_ID: ${VLLM_MODEL_ID:-scb10x/typhoon2.5-qwen3-30b-a3b}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse-web:3000}
       TZ: ${TZ}
+    extra_hosts:
+      # so the container can reach the SSH-tunnel port bound on the host
+      - "host.docker.internal:host-gateway"
     ports:
       - "8080:8080"   # dev convenience; Traefik is the real entrypoint
     labels:

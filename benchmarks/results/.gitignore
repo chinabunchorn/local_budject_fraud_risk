@@ -1,0 +1,4 @@
+# generated benchmark outputs
+*.json
+*.html
+*.png
