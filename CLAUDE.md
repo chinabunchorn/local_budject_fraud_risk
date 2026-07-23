@@ -121,9 +121,9 @@ mission3/
 - Python 3.11+, fully type-hinted, ruff + pytest; TypeScript strict mode. Thai prompt templates
   live in `pipelines/prompts/` as versioned files.
 
-## Current status & next tasks (see docs/ROADMAP.md — Phases 0–3 DONE incl. exit gates; next: Phase 4 live RAG chatbot)
+## Current status & next tasks (see docs/ROADMAP.md — Phases 0–4 DONE incl. exit gates; next: Phase 5 hardening + red-team)
 
-**Where we are (2026-07-23):** Phase 2 (ingestion + structured extraction + real
+**Where we are (2026-07-24):** Phase 2 (ingestion + structured extraction + real
 Typhoon-2.5 risk scoring, **22/22 projects scored**) and Phase 3 (offline-first
 dashboard: FastAPI read API + Next.js UI, exit gate met with LANTA fully offline) are
 COMPLETE, plus two post-Phase-3 rounds driven by mentor feedback: the evidence-first
@@ -132,9 +132,47 @@ project guaranteed a PDF entry point) and item-level anomaly detection (`/budget
 — unit-price YoY spikes, vendor locks, curated standard-price comparison; MVP: the
 หัวเขา 2,000L water tanks, +51.1%/unit, same single-bidder shop 2 years). Everything
 user-facing reads pre-computed, document-cited data — no LLM call anywhere in the
-dashboard path.
-**Next:** Phase 4 (LangGraph RAG chatbot through the tunnel, needs a LANTA demo
-window). Details of every phase below.
+dashboard path. **Phase 4 (live RAG chatbot through the tunnel) is now COMPLETE — exit
+gate met in an attended LANTA window (2026-07-24).**
+**Next:** Phase 5 (hardening + demo readiness: guardrails red-team regression suite,
+Grafana/alerting, ops runbook polish). Details of every phase below.
+
+**Phase 4 progress (July 2026):** live RAG chatbot, the ONE feature that calls live
+inference (ARCHITECTURE Pipeline 3), all built and exit-gate-verified.
+1. DONE — backend RAG path (`backend/app/`): async streaming vLLM client through the
+   tunnel (`services/vllm.py` — typed `TunnelDown` → graceful "outside demonstration
+   window", temp 0.5 + rep-penalty 1.1 per the 0.9.2 whitespace-loop reality, keep-alive
+   pool); async TEI embed+rerank (`services/tei.py`); **LangGraph** state graph
+   (`rag/graph.py`: embed → pgvector top-k over docs **and** regulations → BGE-rerank →
+   cited-prompt assemble); output guardrails (`guardrails/chat_guards.py`) — **sentence-
+   gated** lexicon so a banned verdict term is never shown even mid-stream, citation-
+   existence (drops hallucinated `[C#]`), refuse-when-unsupported; SSE endpoint
+   `POST /api/chat` (`api/chat.py`, the only live-inference route). Versioned Thai chat
+   prompt in `backend/app/rag/prompts/chat/v1/`. Stateless (frontend replays turns;
+   lineage in Langfuse only). 42 backend tests (chat guards/telemetry/stream/tei).
+2. DONE — **streaming telemetry** (Workstream D, the presentation surface):
+   `services/telemetry.py` captures per-request TTFT (raw + display), vLLM `/metrics`
+   **queue-wait delta**, decode tok/s, inter-token p50/p95, e2e, per-stage breakdown →
+   final SSE `telemetry` event + Langfuse metadata. `benchmarks/` — `stub_vllm.py`
+   (offline OpenAI+/metrics stand-in), `stream_bench.py` (replays the 10 scripted
+   questions × baseline/optimized configs via bounded per-request `rerank_top_n`/
+   `max_tokens` overrides → JSON + self-contained baseline-vs-optimized HTML report).
+3. DONE — chat UI (`frontend/app/(dashboard)/chat/`): SSE streaming render, inline
+   `[C#]` chips → reuse the PDF viewer at the cited page / regulation dialog, toggleable
+   live telemetry panel, degradation banner, path-aware footer. `next build` clean;
+   browser-verified (streaming, citations, telemetry, degraded — zero console errors).
+4. DONE — **exit gate met (attended LANTA window, 2026-07-24)**: 10/10 scripted Thai
+   questions answered with resolving citations; kill-drill degraded exactly as designed
+   with the dashboard unaffected; Langfuse traces captured the retrieval set. Benchmark:
+   **TTFT-raw 120.7→65.5 ms (−46%)** optimized vs baseline, tok/s ~115 (display/e2e were
+   reranker-bound on the dev-Mac Rosetta reranker — re-run on the amd64 app VM for
+   representative display/e2e). Runbook: `docs/runbooks/demo_chat.md`.
+   - Reranker fix during prep: TEI `--max-batch-tokens 1024` 413'd on the full candidate
+     set → client clamps passages (220 chars) + batches (12/req), `top_k` 20→10.
+   - **Guardrail gap found in the window & closed:** `คอร์รัปชัน` (Thai loanword for
+     corruption) was missing from `BANNED_TERMS` → added to `shared/schemas/guardrails.py`
+     (blocks batch + chat), verified live. Phase-5 red-team item: spaced-out evasion
+     (`ค อ ร์ รั ป ชั น`) still needs whitespace-normalised matching.
 
 **Done (July 2026).** Repo scaffolded and merged (PR #2); app-zone `docker-compose` verified
 healthy end-to-end (all 9 services, Thai embedding + rerank probes pass); `shared/schemas`

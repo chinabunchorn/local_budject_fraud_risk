@@ -22,7 +22,18 @@ from schemas.risk import RiskAssessment
 
 # Verdict-language ban per CLAUDE.md constraint 3. Thai terms are matched as
 # substrings (Thai has no word boundaries); English case-insensitively.
-BANNED_TERMS: tuple[str, ...] = ("ทุจริต", "ฉ้อโกง", "โกง", "fraud", "corruption")
+# `คอร์รัปชัน` is the common Thai loanword for "corruption" — a live demo
+# (2026-07-24) surfaced the model reaching for it, and it was NOT in the list.
+# NOTE: this catches the plain spelling; a spaced-out evasion ("ค อ ร์ ...")
+# still slips through — whitespace-normalised matching is a Phase-5 red-team item.
+BANNED_TERMS: tuple[str, ...] = (
+    "ทุจริต",
+    "ฉ้อโกง",
+    "โกง",
+    "คอร์รัปชัน",
+    "fraud",
+    "corruption",
+)
 
 
 class LexiconViolation(BaseModel):

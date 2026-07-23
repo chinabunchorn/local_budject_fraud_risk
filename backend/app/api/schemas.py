@@ -11,7 +11,7 @@ system flags, the human auditor decides. No banned lexicon in any copy here.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -335,3 +335,27 @@ class BudgetReportGroup(BaseModel):
 class BudgetReportTrendsResponse(BaseModel):
     items: list[BudgetReportGroup]
     disclaimer_th: str = DISCLAIMER_TH
+
+
+# ---- chat (Phase 4 live RAG) --------------------------------------------------
+
+
+class ChatMessageIn(BaseModel):
+    """A prior conversation turn replayed by the frontend (stateless backend)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class ChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1, max_length=2000)
+    history: list[ChatMessageIn] = Field(default_factory=list)
+    # Optional, bounded per-request overrides of the two measured optimization
+    # levers, so the benchmark harness can A/B configs against one running
+    # backend. Absent in normal use (settings defaults apply).
+    rerank_top_n: int | None = Field(default=None, ge=1, le=20)
+    max_tokens: int | None = Field(default=None, ge=64, le=2048)
